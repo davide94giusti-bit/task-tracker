@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-electron/
+dist-services/
+dist-connected/
+dist-connected-workers/
+release/
+test-results/
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example
+PriorityDesk-UI-Code-Render-Mockups.zip
+build/*.legacy.nsi

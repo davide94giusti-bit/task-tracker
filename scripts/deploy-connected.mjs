@@ -1,0 +1,5 @@
+import{spawnSync}from'node:child_process';import{readdirSync}from'node:fs';
+if(!process.env.CLOUDFLARE_API_TOKEN){console.error('CLOUDFLARE_API_TOKEN is required. Add it to your shell or GitHub secret; never commit it.');process.exit(1)}
+const build=spawnSync('npm',['run','build:connected'],{stdio:'inherit',shell:process.platform==='win32'});if(build.status)process.exit(build.status);
+const services=readdirSync('services-connected',{withFileTypes:true}).filter(x=>x.isDirectory()&&x.name!=='_shared').map(x=>x.name);for(const name of ['data','tasks','people','dependencies-progress','notifications','reminders','backup-export','logging-diagnostics','api-gateway']){if(!services.includes(name))continue;const result=spawnSync('npx',['wrangler','deploy','--config',`cloudflare/${name}.wrangler.toml`],{stdio:'inherit',shell:process.platform==='win32'});if(result.status)process.exit(result.status)}
+const pages=spawnSync('npx',['wrangler','pages','deploy','dist-connected','--project-name','task-tracker-connected'],{stdio:'inherit',shell:process.platform==='win32'});process.exit(pages.status||0);

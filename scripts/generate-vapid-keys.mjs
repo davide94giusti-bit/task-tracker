@@ -1,0 +1,2 @@
+import{webcrypto}from'node:crypto';
+const{publicKey,privateKey}=await webcrypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);const raw=new Uint8Array(await webcrypto.subtle.exportKey('raw',publicKey)),jwk=await webcrypto.subtle.exportKey('jwk',privateKey),b64u=Buffer.from(raw).toString('base64url');console.log('VAPID_PUBLIC_KEY='+b64u);console.log('VAPID_PRIVATE_JWK='+JSON.stringify(jwk));console.error('Store the private JWK only as a Cloudflare Worker secret. Do not commit this output.');

@@ -1,0 +1,9 @@
+name = "task-tracker-people"
+main = "../dist-connected-workers/people/index.mjs"
+compatibility_date = "2026-09-01"
+workers_dev = false
+[[services]]
+binding = "DATA"
+service = "task-tracker-data"
+[vars]
+ENVIRONMENT = "production"

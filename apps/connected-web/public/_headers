@@ -1,0 +1,8 @@
+/*
+  Content-Security-Policy: default-src 'self'; connect-src 'self' https://*.supabase.co https://*.workers.dev; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Cross-Origin-Opener-Policy: same-origin
+/service-worker.js
+  Cache-Control: no-cache

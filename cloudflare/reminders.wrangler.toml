@@ -1,0 +1,13 @@
+name = "task-tracker-reminders"
+main = "../dist-connected-workers/reminders/index.mjs"
+compatibility_date = "2026-09-01"
+workers_dev = false
+triggers = { crons = ["*/5 * * * *"] }
+[[services]]
+binding = "DATA"
+service = "task-tracker-data"
+[[services]]
+binding = "NOTIFICATIONS"
+service = "task-tracker-notifications"
+[vars]
+ENVIRONMENT = "production"
