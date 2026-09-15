@@ -15,3 +15,5 @@ PriorityDesk-UI-Code-Render-Mockups.zip
 build/*.legacy.nsi
 
 /node_modules
+
+/node_modules
