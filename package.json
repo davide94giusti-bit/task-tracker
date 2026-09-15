@@ -1,0 +1,106 @@
+{
+  "name": "task-tracker",
+  "version": "1.4.0",
+  "description": "Local-first Windows task, project, people and dependency manager",
+  "author": "Task Tracker",
+  "license": "MIT",
+  "main": "dist-electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev:local": "npm run dev",
+    "dev:connected": "vite --config apps/connected-web/vite.config.ts",
+    "build:local": "npm run build",
+    "build:connected": "vite build --config apps/connected-web/vite.config.ts && npm run build:connected:workers",
+    "build:connected:workers": "node scripts/build-connected-workers.mjs",
+    "deploy:connected": "node scripts/deploy-connected.mjs",
+    "dist:windows": "npm run dist:win",
+    "dev": "npm run build:runtime && concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "build": "tsc -b && vite build && npm run build:runtime",
+    "build:runtime": "npm run build:electron && npm run build:services",
+    "build:electron": "esbuild src/main/main.ts src/main/preload.ts --bundle --platform=node --format=cjs --out-extension:.js=.cjs --external:electron --outdir=dist-electron",
+    "build:services": "esbuild services/*/index.ts --bundle --platform=node --format=cjs --out-extension:.js=.cjs --outdir=dist-services",
+    "dist:win": "npm run build && electron-builder --win nsis portable --x64",
+    "typecheck": "tsc -b --pretty false",
+    "typecheck:connected": "tsc -p tsconfig.connected.json --pretty false",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:connected": "vitest run tests/connected",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build && cross-env ELECTRON_DISABLE_SANDBOX=1 electron --no-sandbox scripts/render-ui-mockups.cjs",
+    "verify": "npm run typecheck && npm run typecheck:connected && npm run lint && npm test"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.2",
+    "@mui/material": "^7.3.2",
+    "date-fns": "^4.1.0",
+    "electron-log": "^5.4.3",
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.1",
+    "pdfkit": "^0.17.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-hook-form": "^7.62.0",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.35.0",
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.3.1",
+    "@types/pdfkit": "^0.17.3",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.0.0",
+    "electron": "39.2.7",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.35.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "html2canvas": "^1.4.1",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.42.0",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0",
+    "wait-on": "^8.0.4"
+  },
+  "build": {
+    "appId": "com.prioritydesk.app",
+    "productName": "Task Tracker",
+    "asar": true,
+    "compression": "normal",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "dist-services/**/*",
+      "src/main/schema.sql",
+      "package.json"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/brand-icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "${productName}-${version}-${arch}-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-${arch}-Portable.${ext}"
+    }
+  }
+}

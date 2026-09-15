@@ -1,0 +1,33 @@
+name = "task-tracker-gateway"
+main = "../dist-connected-workers/api-gateway/index.mjs"
+compatibility_date = "2026-09-01"
+workers_dev = true
+[[services]]
+binding = "DATA"
+service = "task-tracker-data"
+[[services]]
+binding = "IDENTITY"
+service = "task-tracker-identity-access"
+[[services]]
+binding = "TASKS"
+service = "task-tracker-tasks"
+[[services]]
+binding = "PEOPLE"
+service = "task-tracker-people"
+[[services]]
+binding = "DEPENDENCIES"
+service = "task-tracker-dependencies-progress"
+[[services]]
+binding = "REMINDERS"
+service = "task-tracker-reminders"
+[[services]]
+binding = "NOTIFICATIONS"
+service = "task-tracker-notifications"
+[[services]]
+binding = "BACKUP"
+service = "task-tracker-backup-export"
+[[services]]
+binding = "DIAGNOSTICS"
+service = "task-tracker-logging-diagnostics"
+[vars]
+ENVIRONMENT = "production"
