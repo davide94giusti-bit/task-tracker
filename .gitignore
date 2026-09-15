@@ -13,3 +13,5 @@ test-results/
 !.env.example
 PriorityDesk-UI-Code-Render-Mockups.zip
 build/*.legacy.nsi
+
+/node_modules
