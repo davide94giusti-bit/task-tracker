@@ -1,6 +1,8 @@
 import {
   CreatePrerequisite,
+  DependencyUpdate,
   DependencyWrite,
+  RecordId,
 } from "../../packages/connected-contracts";
 import {
   authContext,
@@ -55,6 +57,38 @@ export default <WorkerHandler<Env>>{
                   p_prerequisite_task_id: input.prerequisiteTaskId,
                   p_mandatory: input.mandatory,
                 },
+              }),
+            }),
+            200,
+            requestId,
+          );
+        }
+        if (url.pathname === "/unlink") {
+          const input = RecordId.parse(await body(request));
+          return json(
+            await call(env.DATA, "/write", env, context, {
+              method: "POST",
+              body: JSON.stringify({
+                table: "task_dependencies",
+                method: "patch",
+                id: input.id,
+                row: { deleted_at: new Date().toISOString(), updated_by: context.userId },
+              }),
+            }),
+            200,
+            requestId,
+          );
+        }
+        if (url.pathname === "/update") {
+          const input = DependencyUpdate.parse(await body(request));
+          return json(
+            await call(env.DATA, "/write", env, context, {
+              method: "POST",
+              body: JSON.stringify({
+                table: "task_dependencies",
+                method: "patch",
+                id: input.id,
+                row: { mandatory: input.mandatory, updated_by: context.userId },
               }),
             }),
             200,

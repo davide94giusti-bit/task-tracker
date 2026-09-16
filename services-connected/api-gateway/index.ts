@@ -30,6 +30,9 @@ interface Env extends BaseEnv {
 const routes: Array<[string, RegExp, keyof Env, string]> = [
   ["GET", /^\/v1\/tasks$/, "TASKS", "/list"],
   ["POST", /^\/v1\/tasks\/save$/, "TASKS", "/save"],
+  ["GET", /^\/v1\/tasks\/details$/, "TASKS", "/details"],
+  ["POST", /^\/v1\/tasks\/checklist\/save$/, "TASKS", "/checklist-save"],
+  ["POST", /^\/v1\/tasks\/checklist\/delete$/, "TASKS", "/checklist-delete"],
   ["GET", /^\/v1\/dashboard$/, "TASKS", "/dashboard"],
   ["GET", /^\/v1\/calendar$/, "TASKS", "/calendar"],
   ["GET", /^\/v1\/projects$/, "TASKS", "/projects"],
@@ -38,6 +41,8 @@ const routes: Array<[string, RegExp, keyof Env, string]> = [
   ["POST", /^\/v1\/people\/save$/, "PEOPLE", "/save"],
   ["GET", /^\/v1\/dependencies\/people-load$/, "DEPENDENCIES", "/people-load"],
   ["POST", /^\/v1\/dependencies\/link$/, "DEPENDENCIES", "/link"],
+  ["POST", /^\/v1\/dependencies\/unlink$/, "DEPENDENCIES", "/unlink"],
+  ["POST", /^\/v1\/dependencies\/update$/, "DEPENDENCIES", "/update"],
   [
     "POST",
     /^\/v1\/dependencies\/create-prerequisite$/,
@@ -48,6 +53,8 @@ const routes: Array<[string, RegExp, keyof Env, string]> = [
   ["POST", /^\/v1\/reminders\/snooze$/, "REMINDERS", "/snooze"],
   ["POST", /^\/v1\/push\/subscribe$/, "NOTIFICATIONS", "/subscribe"],
   ["POST", /^\/v1\/notifications\/test-email$/, "NOTIFICATIONS", "/test-email"],
+  ["GET", /^\/v1\/notifications\/inbox$/, "NOTIFICATIONS", "/inbox"],
+  ["POST", /^\/v1\/notifications\/read$/, "NOTIFICATIONS", "/read"],
   ["GET", /^\/v1\/preferences$/, "NOTIFICATIONS", "/preferences"],
   ["POST", /^\/v1\/preferences$/, "NOTIFICATIONS", "/preferences"],
   ["POST", /^\/v1\/backup\/export$/, "BACKUP", "/export"],

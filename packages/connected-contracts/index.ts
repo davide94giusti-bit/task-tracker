@@ -89,6 +89,16 @@ export const DependencyWrite = z.object({
   prerequisiteTaskId: Uuid,
   mandatory: z.boolean().default(true),
 });
+export const ChecklistWrite = z.object({
+  id: Uuid.optional(),
+  taskId: Uuid,
+  description: z.string().trim().min(1).max(1000),
+  completed: z.boolean().default(false),
+  required: z.boolean().default(true),
+  position: z.number().int().nonnegative().default(0),
+});
+export const RecordId = z.object({ id: Uuid }).strict();
+export const DependencyUpdate = z.object({ id: Uuid, mandatory: z.boolean() }).strict();
 export const ImportRequest = z.object({
   importId: Uuid,
   dryRun: z.boolean().default(true),

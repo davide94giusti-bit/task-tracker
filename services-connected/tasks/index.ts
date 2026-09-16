@@ -1,8 +1,11 @@
 import {
   CalendarQuery,
+  ChecklistWrite,
   ProjectWrite,
+  RecordId,
   TaskQuery,
   TaskWrite,
+  Uuid,
 } from "../../packages/connected-contracts";
 import {
   authContext,
@@ -48,6 +51,69 @@ export default <WorkerHandler<Env>>{
           await call(env.DATA, "/tasks/save", env, context, {
             method: "POST",
             body: JSON.stringify(input),
+          }),
+          200,
+          requestId,
+        );
+      }
+      if (url.pathname === "/details") {
+        const taskId = Uuid.parse(url.searchParams.get("taskId"));
+        const [checklist, dependencies] = await Promise.all([
+          call(env.DATA, "/select", env, context, {
+            method: "POST",
+            body: JSON.stringify({
+              table: "checklist_items",
+              filters: { task_id: taskId, deleted_at: null },
+              limit: 500,
+            }),
+          }),
+          call(env.DATA, "/select", env, context, {
+            method: "POST",
+            body: JSON.stringify({
+              table: "task_dependencies",
+              filters: { waiting_task_id: taskId, deleted_at: null },
+              limit: 500,
+            }),
+          }),
+        ]);
+        return json({ checklist, dependencies }, 200, requestId);
+      }
+      if (url.pathname === "/checklist-save") {
+        const input = ChecklistWrite.parse(await body(request));
+        return json(
+          await call(env.DATA, "/write", env, context, {
+            method: "POST",
+            body: JSON.stringify({
+              table: "checklist_items",
+              method: input.id ? "patch" : "post",
+              id: input.id,
+              row: {
+                ...(!input.id ? { id: crypto.randomUUID() } : {}),
+                task_id: input.taskId,
+                description: input.description,
+                completed: input.completed,
+                required: input.required,
+                position: input.position,
+                updated_by: context.userId,
+                ...(!input.id ? { created_by: context.userId } : {}),
+              },
+            }),
+          }),
+          200,
+          requestId,
+        );
+      }
+      if (url.pathname === "/checklist-delete") {
+        const input = RecordId.parse(await body(request));
+        return json(
+          await call(env.DATA, "/write", env, context, {
+            method: "POST",
+            body: JSON.stringify({
+              table: "checklist_items",
+              method: "patch",
+              id: input.id,
+              row: { deleted_at: new Date().toISOString(), updated_by: context.userId },
+            }),
           }),
           200,
           requestId,

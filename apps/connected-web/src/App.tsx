@@ -5,6 +5,7 @@ import { api, flushQueue } from './api';
 import { consumeAuthLink, resetPassword, session, signIn } from './auth';
 import { AccountSecurity, PasswordSetup, UsersAccessView } from './AccessViews';
 import { BackupImportView, DiagnosticsView } from './BackupDiagnosticsViews';
+import { EnhancedDashboardView, EnhancedTasksView, NotificationBell, TaskEditorDialog } from './ConnectedEnhancements';
 import type { Dashboard, Person, Project, Task, View } from './types';
 // React 19 no longer exports JSX globally; this local bridge types stored icon elements.
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -136,11 +137,11 @@ return <>
 </CardActionArea>
 </Card>
 </>}</>; }
-function ProjectsView() { const [items, setItems] = useState<Project[]>([]), [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [form, setForm] = useState({ name: '', description: '', color: '#2563eb' }); const load = useCallback(() => { setError(''); return api<Project[]>('/projects').then(setItems).catch(e => setError(e.message)); }, []); useEffect(() => { void load(); }, [load]);
+function ProjectsView({ onOpen }: { onOpen: (project: Project) => void }) { const [items, setItems] = useState<Project[]>([]), [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [form, setForm] = useState({ name: '', description: '', color: '#2563eb' }); const load = useCallback(() => { setError(''); return api<Project[]>('/projects').then(setItems).catch(e => setError(e.message)); }, []); useEffect(() => { void load(); }, [load]);
 return <>
 <PageTitle title="Projects" subtitle="Group responsibilities and measure aggregate progress." action={<Button variant="contained" startIcon={<Add />} onClick={() => setOpen(true)}>New project</Button>}/>
 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-<Box className="card-grid">{items.map(p => <Card key={p.id}>
+<Box className="card-grid">{items.map(p => <Card key={p.id}><CardActionArea onClick={() => onOpen(p)}>
 <CardContent>
 <Stack direction="row" spacing={2}>
 <Avatar sx={{ bgcolor: p.color }}>{p.name[0]}</Avatar>
@@ -152,22 +153,22 @@ return <>
 </Box>
 </Stack>
 </CardContent>
-</Card>)}</Box>
+</CardActionArea></Card>)}</Box>
 <Dialog open={open} onClose={() => !busy && setOpen(false)} fullWidth maxWidth="sm"><DialogTitle>Create project</DialogTitle><DialogContent><Stack spacing={2} mt={1}><TextField autoFocus label="Project name" value={form.name} onChange={e => setForm(v => ({ ...v, name: e.target.value }))}/><TextField multiline minRows={3} label="Description" value={form.description} onChange={e => setForm(v => ({ ...v, description: e.target.value }))}/><TextField label="Colour" type="color" value={form.color} onChange={e => setForm(v => ({ ...v, color: e.target.value }))} slotProps={{ inputLabel: { shrink: true } }}/></Stack></DialogContent><DialogActions><Button disabled={busy} onClick={() => setOpen(false)}>Cancel</Button><Button variant="contained" disabled={busy || !form.name.trim()} onClick={async () => { setBusy(true); setError(''); try { await api('/projects/save', { method: 'POST', body: { ...form, name: form.name.trim() } }); setForm({ name: '', description: '', color: '#2563eb' }); setOpen(false); await load(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>{busy ? <CircularProgress size={20}/> : 'Create project'}</Button></DialogActions></Dialog>
 </>; }
-function PeopleView() { const [items, setItems] = useState<Person[]>([]), [role, setRole] = useState(''), [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [form, setForm] = useState({ fullName: '', email: '', company: '', role: '', phone: '', notes: '' }); const load = useCallback(() => { setError(''); return api<Person[]>('/people' + (role ? `?role=${encodeURIComponent(role)}` : '')).then(setItems).catch(e => setError(e.message)); }, [role]); useEffect(() => { void load(); }, [load]);
+function PeopleView({ onOpen }: { onOpen: (person: Person) => void }) { const [items, setItems] = useState<Person[]>([]), [role, setRole] = useState(''), [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [form, setForm] = useState({ fullName: '', email: '', company: '', role: '', phone: '', notes: '' }); const load = useCallback(() => { setError(''); return api<Person[]>('/people' + (role ? `?role=${encodeURIComponent(role)}` : '')).then(setItems).catch(e => setError(e.message)); }, [role]); useEffect(() => { void load(); }, [load]);
 return <>
 <PageTitle title="People" subtitle="Contacts and responsibilities. People do not receive login access." action={<Button variant="contained" startIcon={<Add />} onClick={() => setOpen(true)}>Add person</Button>}/>
 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 <TextField size="small" label="Filter by function" value={role} onChange={e => setRole(e.target.value)} sx={{ mb: 2 }}/>
-<Box className="card-grid">{items.map(p => <Card key={p.id}>
+<Box className="card-grid">{items.map(p => <Card key={p.id}><CardActionArea onClick={() => onOpen(p)}>
 <CardContent>
 <Typography variant="h6">{p.fullName}</Typography>
 <Typography color="text.secondary">{p.role || 'No function'} • {p.activeTasks} active</Typography>
 <LinearProgress variant="determinate" value={p.progress} sx={{ mt: 2, height: 8, borderRadius: 4 }}/>
 <Typography variant="caption">{p.progress}% of task load complete</Typography>
 </CardContent>
-</Card>)}</Box>
+</CardActionArea></Card>)}</Box>
 <Dialog open={open} onClose={() => !busy && setOpen(false)} fullWidth maxWidth="sm"><DialogTitle>Add person or contact</DialogTitle><DialogContent><Stack spacing={2} mt={1}><TextField autoFocus label="Full name" value={form.fullName} onChange={e => setForm(v => ({ ...v, fullName: e.target.value }))}/><TextField label="Email (optional)" type="email" value={form.email} onChange={e => setForm(v => ({ ...v, email: e.target.value }))}/><TextField label="Company" value={form.company} onChange={e => setForm(v => ({ ...v, company: e.target.value }))}/><TextField label="Function / role" value={form.role} onChange={e => setForm(v => ({ ...v, role: e.target.value }))}/><TextField label="Phone" value={form.phone} onChange={e => setForm(v => ({ ...v, phone: e.target.value }))}/><TextField multiline minRows={3} label="Notes" value={form.notes} onChange={e => setForm(v => ({ ...v, notes: e.target.value }))}/></Stack></DialogContent><DialogActions><Button disabled={busy} onClick={() => setOpen(false)}>Cancel</Button><Button variant="contained" disabled={busy || !form.fullName.trim()} onClick={async () => { setBusy(true); setError(''); try { await api('/people/save', { method: 'POST', body: { ...form, fullName: form.fullName.trim() } }); setForm({ fullName: '', email: '', company: '', role: '', phone: '', notes: '' }); setOpen(false); await load(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>{busy ? <CircularProgress size={20}/> : 'Add person'}</Button></DialogActions></Dialog>
 </>; }
 function CalendarView({ onOpen, onNew }: {
@@ -198,7 +199,6 @@ return <>
 <CardContent>
 <Typography fontWeight={700}>{Number(d.date.slice(-2))}</Typography>
 {d.count > 0 && <Box className="calendar-count" aria-label={`${d.count} tasks`}>{d.count}</Box>}
-<Typography variant="caption">{d.count ? `${d.count} task${d.count === 1 ? '' : 's'}` : 'No tasks'}</Typography>
 </CardContent>
 </CardActionArea>
 </Card> : <Box key={`blank${i}`}/>)}</Box>
@@ -221,7 +221,11 @@ return <>
 </Dialog>
 </>; }
 function applicationServerKey(value: string) { const padding = '='.repeat((4 - value.length % 4) % 4), raw = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, character => character.charCodeAt(0)); }
-function SettingsView() { const [supported] = useState('serviceWorker' in navigator && 'PushManager' in window), [message, setMessage] = useState(''), [busy, setBusy] = useState(false);
+type NotificationPreferences={emailEnabled:boolean;pushEnabled:boolean;reminder:boolean;dueToday:boolean;overdue:boolean;dailySummary:boolean;timezone:string;quietStart:string;quietEnd:string};
+const defaultPreferences:NotificationPreferences={emailEnabled:false,pushEnabled:false,reminder:true,dueToday:true,overdue:true,dailySummary:false,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',quietStart:'22:00',quietEnd:'07:00'};
+function SettingsView() { const [supported] = useState('serviceWorker' in navigator && 'PushManager' in window), [message, setMessage] = useState(''), [busy, setBusy] = useState(false), [preferences,setPreferences]=useState<NotificationPreferences>(defaultPreferences);
+useEffect(()=>{void api<NotificationPreferences|null>('/preferences').then(value=>value&&setPreferences({...defaultPreferences,...value})).catch(error=>setMessage(error.message))},[]);
+const savePreferences=async(next:NotificationPreferences)=>{setPreferences(next);await api('/preferences',{method:'POST',body:next})};
 return <>
 <PageTitle title="Settings" subtitle="Notifications, email, timezone, and connected account."/>
 <Stack spacing={2}>
@@ -232,11 +236,14 @@ return <>
 <Button sx={{ mt: 2 }} variant="contained" disabled={!supported || busy} onClick={async () => {
     setBusy(true);
     try {
+        if(!import.meta.env.VITE_VAPID_PUBLIC_KEY)throw new Error('The Pages VAPID public key is missing.');
         const permission = await Notification.requestPermission();
-        if (permission !== 'granted') throw new Error('Notifications were not enabled.');
+        if (permission === 'denied') throw new Error('Notifications are blocked for this site. Change the browser site permission to Allow.');
+        if (permission !== 'granted') throw new Error('The notification permission request was dismissed.');
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey(import.meta.env.VITE_VAPID_PUBLIC_KEY) as BufferSource });
         await api('/push/subscribe', { method: 'POST', body: { ...subscription.toJSON(), deviceLabel: navigator.userAgent.slice(0, 100) } });
+        await savePreferences({...preferences,pushEnabled:true});
         setMessage('Live notifications are enabled on this device.');
     }
     catch (error) { setMessage((error as Error).message); }
@@ -247,7 +254,8 @@ return <>
 <Card>
 <CardContent>
 <Typography variant="h6">Email reminders</Typography>
-<FormControlLabel control={<Switch defaultChecked/>} label="Send reminder emails"/>
+<Typography color="text.secondary">Reminder emails are sent to the email address used for this account: {session.get()?.user.email || 'current signed-in email'}.</Typography>
+<FormControlLabel control={<Switch checked={preferences.emailEnabled} disabled={busy} onChange={async event=>{setBusy(true);try{await savePreferences({...preferences,emailEnabled:event.target.checked});setMessage(event.target.checked?'Email reminders enabled.':'Email reminders disabled.')}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}}/>} label="Send reminder emails"/>
 <Button disabled={busy} onClick={async () => { setBusy(true); try { await api('/notifications/test-email', { method: 'POST', body: {} }); setMessage('Test email sent.'); } catch (error) { setMessage((error as Error).message); } finally { setBusy(false); } }}>Send test email</Button>
 </CardContent>
 </Card>
@@ -262,26 +270,18 @@ function Generic({ view }: {
 <Typography color="text.secondary">This view is ready to load its validated data from the matching connected service.</Typography>
 </Paper>
 </>; }
-export default function App() { const [logged, setLogged] = useState(!!session.get()), [authMode,setAuthMode]=useState<'invite'|'recovery'|null>(null), [view, setView] = useState<View>((new URLSearchParams(location.search).get('view') as View) || 'dashboard'), [dark, setDark] = useState(matchMedia('(prefers-color-scheme: dark)').matches), [drawer, setDrawer] = useState(false), [desktopNav, setDesktopNav] = useState(true), [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({}), [offline, setOffline] = useState(!navigator.onLine), [task, setTask] = useState<Task | null>(null), [newDate, setNewDate] = useState<string | null>(null), [filter, setFilter] = useState<{
+export default function App() { const [logged, setLogged] = useState(!!session.get()), [platformAdmin, setPlatformAdmin] = useState(false), [authMode,setAuthMode]=useState<'invite'|'recovery'|null>(null), [view, setView] = useState<View>((new URLSearchParams(location.search).get('view') as View) || 'dashboard'), [dark, setDark] = useState(matchMedia('(prefers-color-scheme: dark)').matches), [drawer, setDrawer] = useState(false), [desktopNav, setDesktopNav] = useState(true), [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({}), [offline, setOffline] = useState(!navigator.onLine), [task, setTask] = useState<Task | null>(null), [newDate, setNewDate] = useState<string | null>(null), [filter, setFilter] = useState<{
     title: string;
     q: Record<string, unknown>;
 } | null>(null);
-const [editor, setEditor] = useState({ title: '', description: '', status: 'not_started', priority: 'medium', dueDate: '' });
-const [editorBusy, setEditorBusy] = useState(false);
-const [editorError, setEditorError] = useState('');
-useEffect(() => {
-    if (task || newDate !== null)
-        setEditor({ title: task?.title || '', description: task?.description || '', status: task?.status || 'not_started', priority: task?.priority || 'medium', dueDate: newDate || task?.dueDate || '' });
-    setEditorError('');
-}, [task, newDate]);
-const mobile = useMediaQuery('(max-width:800px)'); useEffect(()=>{void consumeAuthLink().then(mode=>{if(mode){setLogged(true);setAuthMode(mode)}})},[]); useEffect(() => { const online = () => { setOffline(false); void flushQueue(); };
+const mobile = useMediaQuery('(max-width:800px)'); useEffect(()=>{void consumeAuthLink().then(mode=>{if(mode){setLogged(true);setAuthMode(mode)}})},[]); useEffect(()=>{if(logged)void api<{platformAdmin:boolean}>('/access/state').then(state=>setPlatformAdmin(state.platformAdmin)).catch(()=>setPlatformAdmin(false))},[logged]); useEffect(() => { const online = () => { setOffline(false); void flushQueue(); };
 const off = () => setOffline(true); addEventListener('online', online); addEventListener('offline', off);
 const focus = () => document.visibilityState === 'visible' && navigator.onLine && void flushQueue(); document.addEventListener('visibilitychange', focus); return () => { removeEventListener('online', online); removeEventListener('offline', off); document.removeEventListener('visibilitychange', focus); }; }, []);
 const theme = useMemo(() => createTheme({ palette: { mode: dark ? 'dark' : 'light', primary: { main: '#1d4ed8' }, background: { default: dark ? '#0c1220' : '#f4f7fb', paper: dark ? '#151d2e' : '#fff' } }, shape: { borderRadius: 12 }, typography: { fontFamily: 'Inter,Segoe UI,Arial,sans-serif', h4: { fontWeight: 800 }, h6: { fontWeight: 750 } }, components: { MuiButton: { defaultProps: { disableElevation: true } }, MuiCard: { styleOverrides: { root: { border: '1px solid', borderColor: dark ? '#26334a' : '#e4eaf2' } } } } }), [dark]); if(authMode)return <ThemeProvider theme={theme}><CssBaseline/><PasswordSetup mode={authMode} onDone={()=>{setAuthMode(null);setView('dashboard')}}/></ThemeProvider>; if (!logged)
     return <ThemeProvider theme={theme}><CssBaseline/>
 <Login />
 </ThemeProvider>;
-const body = filter ? <TasksView view="tasks" query={filter.q} onOpen={setTask} onNew={() => setNewDate('')}/> : view === 'dashboard' ? <DashboardView openFilter={(title, q) => setFilter({ title, q })}/> : ['tasks', 'today', 'upcoming', 'completed', 'trash'].includes(view) ? <TasksView view={view} onOpen={setTask} onNew={() => setNewDate('')}/> : view === 'projects' ? <ProjectsView /> : view === 'people' ? <PeopleView /> : view === 'calendar' ? <CalendarView onOpen={setTask} onNew={setNewDate}/> : view === 'settings' ? <SettingsView /> : view==='access'?<UsersAccessView/>:view==='security'?<AccountSecurity/>:view==='backup'?<BackupImportView/>:view==='diagnostics'?<DiagnosticsView/>:<Generic view={view}/>;
+const body = filter ? <EnhancedTasksView view="tasks" query={filter.q} title={filter.title} onOpen={setTask} onNew={() => setNewDate('')}/> : view === 'dashboard' ? <EnhancedDashboardView openFilter={(title, q) => setFilter({ title, q })}/> : ['tasks', 'today', 'upcoming', 'completed', 'trash'].includes(view) ? <EnhancedTasksView view={view} onOpen={setTask} onNew={() => setNewDate('')}/> : view === 'projects' ? <ProjectsView onOpen={project => setFilter({ title: project.name, q: { projectId: project.id } })}/> : view === 'people' ? <PeopleView onOpen={person => setFilter({ title: person.fullName, q: { responsiblePersonId: person.id } })}/> : view === 'calendar' ? <CalendarView onOpen={setTask} onNew={setNewDate}/> : view === 'settings' ? <SettingsView /> : view==='access'?(platformAdmin?<UsersAccessView/>:<Alert severity="info">Only the platform administrator can invite and manage application users.</Alert>):view==='security'?<AccountSecurity/>:view==='backup'?<BackupImportView/>:view==='diagnostics'?<DiagnosticsView/>:<Generic view={view}/>;
 const releaseFocus = () => (document.activeElement as HTMLElement | null)?.blur();
 const navigate = (v: View) => { releaseFocus(); setFilter(null); setView(v); setDrawer(false); history.replaceState(null, '', `?view=${v}`); };
 return <ThemeProvider theme={theme}><CssBaseline/>
@@ -292,7 +292,7 @@ return <ThemeProvider theme={theme}><CssBaseline/>
 </IconButton>}<Avatar sx={{ width: 34, height: 34, bgcolor: 'primary.main', fontWeight: 800 }}>T</Avatar>
 <Typography fontWeight={800} color="primary" ml={1}>Task Tracker</Typography>
 <Chip label="Connected" size="small" color="success" sx={{ ml: 1 }}/>
-<Box flex={1}/>{offline && <Chip color="warning" label="Offline"/>}<IconButton onClick={() => setDark(!dark)}>{dark ? <LightMode /> : <DarkMode />}</IconButton>
+<Box flex={1}/>{offline && <Chip color="warning" label="Offline"/>}<NotificationBell/><IconButton onClick={() => setDark(!dark)}>{dark ? <LightMode /> : <DarkMode />}</IconButton>
 <Tooltip title="Sign out">
 <IconButton onClick={() => { session.set(null); setLogged(false); }}>
 <Logout />
@@ -304,7 +304,7 @@ return <ThemeProvider theme={theme}><CssBaseline/>
 <ListItemButton aria-expanded={!collapsedGroups[group]} onClick={() => setCollapsedGroups(value => ({ ...value, [group]: !value[group] }))}>
 <ListItemText primary={group} primaryTypographyProps={{ variant: 'overline', fontWeight: 800 }}/>
 {collapsedGroups[group] ? <ExpandMore /> : <ExpandLess />}
-</ListItemButton>{!collapsedGroups[group] && nav.filter(n => n.group === group).map(n => <ListItemButton key={n.view} selected={view === n.view && !filter} onClick={() => navigate(n.view)}>
+</ListItemButton>{!collapsedGroups[group] && nav.filter(n => n.group === group && (n.view !== 'access' || platformAdmin)).map(n => <ListItemButton key={n.view} selected={view === n.view && !filter} onClick={() => navigate(n.view)}>
 <ListItemIcon>{n.icon}</ListItemIcon>
 <ListItemText primary={n.label}/>
 </ListItemButton>)}</Box>)}</List>
@@ -318,46 +318,12 @@ return <ThemeProvider theme={theme}><CssBaseline/>
 </BottomNavigation>
 </Paper>}<Drawer anchor="right" open={mobile && drawer} onClose={() => { releaseFocus(); setDrawer(false); }}>
 <Box sx={{ width: 'min(88vw,360px)', pt: 'env(safe-area-inset-top)' }}>
-<List>{nav.filter(n => !['dashboard', 'today', 'tasks', 'calendar'].includes(n.view)).map(n => <ListItemButton key={n.view} onClick={() => navigate(n.view)}>
+<List>{nav.filter(n => !['dashboard', 'today', 'tasks', 'calendar'].includes(n.view) && (n.view !== 'access' || platformAdmin)).map(n => <ListItemButton key={n.view} onClick={() => navigate(n.view)}>
 <ListItemIcon>{n.icon}</ListItemIcon>
 <ListItemText primary={n.label}/>
 </ListItemButton>)}</List>
 </Box>
 </Drawer>
-<Dialog open={!!task || newDate !== null} onClose={() => { setTask(null); setNewDate(null); }} fullScreen={mobile} fullWidth maxWidth="md">
-<DialogTitle>{task ? 'Task details' : 'Create task'}</DialogTitle>
-<DialogContent>
-<Stack spacing={2} mt={1}>
-{editorError && <Alert severity="error">{editorError}</Alert>}
-<TextField label="Title" value={editor.title} onChange={event => setEditor(value => ({ ...value, title: event.target.value }))}/>
-<TextField multiline minRows={3} label="Description" value={editor.description} onChange={event => setEditor(value => ({ ...value, description: event.target.value }))}/>
-<Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-<TextField select fullWidth label="Status" value={editor.status} onChange={event => setEditor(value => ({ ...value, status: event.target.value }))}>{['not_started', 'in_progress', 'waiting', 'completed'].map(s => <MenuItem key={s} value={s}>{s.replaceAll('_', ' ')}</MenuItem>)}</TextField>
-<TextField select fullWidth label="Priority" value={editor.priority} onChange={event => setEditor(value => ({ ...value, priority: event.target.value }))}>{['critical', 'high', 'medium', 'low', 'none'].map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}</TextField>
-</Stack>
-<TextField label="Due date" type="date" value={editor.dueDate} onChange={event => setEditor(value => ({ ...value, dueDate: event.target.value }))} slotProps={{ inputLabel: { shrink: true } }}/>
-<Alert severity="info">Checklist and Dependencies sections enforce required completion rules on the server.</Alert>
-</Stack>
-</DialogContent>
-<DialogActions>
-<Button onClick={() => { setTask(null); setNewDate(null); }}>Cancel</Button>
-<Button variant="contained" disabled={editorBusy || !editor.title.trim()} onClick={async () => {
-    setEditorBusy(true);
-    setEditorError('');
-    try {
-        await api('/tasks/save', { method: 'POST', queueIfOffline: true, body: { id: task?.id, title: editor.title.trim(), description: editor.description, status: editor.status, priority: editor.priority, dueDate: editor.dueDate || null, expectedVersion: task?.version } });
-        setTask(null);
-        setNewDate(null);
-        location.reload();
-    }
-    catch (error) {
-        setEditorError((error as Error).message);
-    }
-    finally {
-        setEditorBusy(false);
-    }
-}}>{editorBusy ? <CircularProgress size={20}/> : 'Save task'}</Button>
-</DialogActions>
-</Dialog>
+<TaskEditorDialog task={task} newDate={newDate} open={!!task || newDate !== null} mobile={mobile} onClose={() => { setTask(null); setNewDate(null); }} onSaved={() => { setTask(null); setNewDate(null); location.reload(); }}/>
 </Box>
 </ThemeProvider>; }
