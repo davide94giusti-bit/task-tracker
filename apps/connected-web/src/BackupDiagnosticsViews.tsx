@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import JSZip from 'jszip';
-import { Alert, Button, Card, CardContent, Chip, CircularProgress, Divider, LinearProgress, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Divider, LinearProgress, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import { api } from './api';
 
 type BackupMetadata = {
@@ -35,8 +35,9 @@ type ImportPreview = {
 
 type Diagnostics = {
   services: Array<{ name: string; status: string; latencyMs: number; version?: string; error?: string }>;
-  events: Array<{ id: string; createdAt?: string; level?: string; service?: string; eventType?: string; requestId?: string; summary?: string }>;
+  events: Array<{ id: string; createdAt?: string; level?: string; service?: string; eventType?: string; requestId?: string; summary?: string; source?: string; details?: any }>;
   privacy: string;
+  environment?: string; generatedAt?: string; requestId?: string; level?: string;
 };
 
 const MAX_BACKUP_BYTES = 8 * 1024 * 1024;
@@ -146,15 +147,15 @@ export function BackupImportView() {
 }
 
 export function DiagnosticsView() {
-  const [data, setData] = useState<Diagnostics | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
-  const load = useCallback(async () => { setBusy(true); setError(''); try { setData(await api<Diagnostics>('/diagnostics')); } catch (reason) { setError((reason as Error).message); } finally { setBusy(false); } }, []);
+  const [data, setData] = useState<Diagnostics | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [level,setLevel]=useState('info'),[service,setService]=useState('all');
+  const load = useCallback(async () => { setBusy(true); setError(''); try { setData(await api<Diagnostics>(`/diagnostics?level=${level}`)); } catch (reason) { setError((reason as Error).message); } finally { setBusy(false); } }, [level]);
   useEffect(() => { void load(); }, [load]);
   return <Stack spacing={2}>
     <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={1}>
       <div><Typography variant="h4">Diagnostics</Typography><Typography color="text.secondary">Privacy-safe Connected service and security events.</Typography></div>
-      <Stack direction="row" gap={1}><Button onClick={load} disabled={busy}>Refresh</Button><Button variant="outlined" disabled={!data} onClick={() => data && downloadJson(`Task-Tracker-Diagnostics-${new Date().toISOString().slice(0, 10)}.json`, data)}>Download JSON</Button></Stack>
+      <Stack direction={{xs:'column',sm:'row'}} gap={1}><TextField select size="small" label="Log detail" value={level} onChange={event=>setLevel(event.target.value)} sx={{minWidth:140}}><MenuItem value="error">Errors only</MenuItem><MenuItem value="warn">Warnings</MenuItem><MenuItem value="info">Info</MenuItem><MenuItem value="debug">Debug</MenuItem><MenuItem value="verbose">Verbose</MenuItem></TextField><TextField select size="small" label="Service" value={service} onChange={event=>setService(event.target.value)} sx={{minWidth:160}}><MenuItem value="all">All services</MenuItem>{data?.services.map(item=><MenuItem key={item.name} value={item.name}>{item.name}</MenuItem>)}</TextField><Button onClick={load} disabled={busy}>Refresh</Button><Button variant="outlined" disabled={!data} onClick={() => data && downloadJson(`Task-Tracker-Diagnostics-${new Date().toISOString().slice(0, 10)}.json`, data)}>Download JSON</Button></Stack>
     </Stack>
     {busy && <LinearProgress/>}{error && <Alert severity="error">{error}</Alert>}
-    {data && <><Alert severity={data.services.every(service => service.status === 'ok') ? 'success' : 'warning'}>{data.services.filter(service => service.status === 'ok').length} of {data.services.length} internal services are responding.</Alert><Paper variant="outlined" sx={{ p: 2 }}><Typography fontWeight={700} mb={1}>Connected services</Typography><Stack direction="row" gap={1} flexWrap="wrap">{data.services.map(service => <Chip color={service.status === 'ok' ? 'success' : 'error'} variant="outlined" key={service.name} label={`${service.name}: ${service.status} (${service.latencyMs} ms)`}/>)}</Stack></Paper><Alert severity="info">{data.privacy}</Alert><Typography variant="h6">Recent events</Typography>{data.events.length === 0 ? <Paper variant="outlined" sx={{ p: 3 }}><Typography>No workspace audit events have been recorded yet.</Typography></Paper> : <Stack spacing={1}>{data.events.map(event => <Paper variant="outlined" sx={{ p: 2 }} key={event.id}><Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between"><Typography fontWeight={700}>{event.summary || event.eventType}</Typography><Chip size="small" label={event.level || 'info'}/></Stack><Typography variant="body2" color="text.secondary">{event.service} · {event.createdAt ? new Date(event.createdAt).toLocaleString() : 'Unknown time'}{event.requestId ? ` · request ${event.requestId}` : ''}</Typography></Paper>)}</Stack>}</>}
+    {data && <><Alert severity={data.services.every(item => item.status === 'ok') ? 'success' : 'warning'}>{data.services.filter(item => item.status === 'ok').length} of {data.services.length} internal services are responding. Environment: {data.environment||'production'}.</Alert><Paper variant="outlined" sx={{ p: 2 }}><Typography fontWeight={700} mb={1}>Connected services</Typography><Stack direction="row" gap={1} flexWrap="wrap">{data.services.map(item => <Chip color={item.status === 'ok' ? 'success' : 'error'} variant="outlined" key={item.name} label={`${item.name}: ${item.status} (${item.latencyMs} ms) · ${item.version||'unknown'}`}/>)}</Stack></Paper><Alert severity="info">{data.privacy}</Alert><Stack direction="row" justifyContent="space-between"><Typography variant="h6">Recent events</Typography><Typography variant="caption" color="text.secondary">Generated {data.generatedAt?new Date(data.generatedAt).toLocaleString():'now'} · {data.events.length} entries</Typography></Stack>{data.events.filter(event=>service==='all'||event.service===service).length === 0 ? <Paper variant="outlined" sx={{ p: 3 }}><Typography>No events match this level and service.</Typography></Paper> : <Stack spacing={1}>{data.events.filter(event=>service==='all'||event.service===service).map(event => <Paper variant="outlined" sx={{ p: 2 }} key={event.id}><Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between"><Typography fontWeight={700}>{event.summary || event.eventType}</Typography><Stack direction="row" gap={.5}><Chip size="small" variant="outlined" label={event.source||'audit'}/><Chip size="small" color={event.level==='error'?'error':event.level==='warn'?'warning':event.level==='debug'||event.level==='verbose'?'secondary':'default'} label={event.level || 'info'}/></Stack></Stack><Typography variant="body2" color="text.secondary">{event.service} · {event.eventType} · {event.createdAt ? new Date(event.createdAt).toLocaleString() : 'Unknown time'}{event.requestId ? ` · request ${event.requestId}` : ''}</Typography>{event.details&&<Box component="details" mt={1}><Typography component="summary" variant="caption" sx={{cursor:'pointer'}}>Technical details</Typography><Box component="pre" sx={{fontSize:12,whiteSpace:'pre-wrap',overflowWrap:'anywhere',m:0,mt:1,p:1,bgcolor:'action.hover',borderRadius:1}}>{JSON.stringify(event.details,null,2)}</Box></Box>}</Paper>)}</Stack>}</>}
   </Stack>;
 }

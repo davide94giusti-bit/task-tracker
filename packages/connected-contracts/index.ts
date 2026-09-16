@@ -98,6 +98,18 @@ export const ChecklistWrite = z.object({
   position: z.number().int().nonnegative().default(0),
 });
 export const RecordId = z.object({ id: Uuid }).strict();
+export const TaskAttachmentUpload = z.object({
+  taskId: Uuid,
+  fileName: z.string().trim().min(1).max(240),
+  mimeType: z.string().trim().min(1).max(150),
+  sizeBytes: z.number().int().positive().max(6 * 1024 * 1024),
+  base64Data: z.string().min(1).max(8_500_000),
+}).strict();
+export const TaskAttachmentLink = z.object({
+  taskId: Uuid,
+  label: z.string().trim().min(1).max(240),
+  url: z.string().url().max(4096).refine(value => value.startsWith('https://'), 'Links must use HTTPS'),
+}).strict();
 export const DependencyUpdate = z.object({ id: Uuid, mandatory: z.boolean() }).strict();
 export const ImportRequest = z.object({
   importId: Uuid,

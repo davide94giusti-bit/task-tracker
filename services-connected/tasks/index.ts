@@ -3,6 +3,8 @@ import {
   ChecklistWrite,
   ProjectWrite,
   RecordId,
+  TaskAttachmentLink,
+  TaskAttachmentUpload,
   TaskQuery,
   TaskWrite,
   Uuid,
@@ -118,6 +120,30 @@ export default <WorkerHandler<Env>>{
           200,
           requestId,
         );
+      }
+      if (url.pathname === "/delete") {
+        const input = RecordId.parse(await body(request));
+        return json(await call(env.DATA, "/write", env, context, { method: "POST", body: JSON.stringify({ table: "tasks", method: "patch", id: input.id, row: { deleted_at: new Date().toISOString(), updated_by: context.userId } }) }), 200, requestId);
+      }
+      if (url.pathname === "/attachments") {
+        const taskId = Uuid.parse(url.searchParams.get("taskId"));
+        return json(await call(env.DATA, "/attachments/list", env, context, { method: "POST", body: JSON.stringify({ taskId }) }), 200, requestId);
+      }
+      if (url.pathname === "/attachment-upload") {
+        const input = TaskAttachmentUpload.parse(await body(request, 8_500_000));
+        return json(await call(env.DATA, "/attachments/upload", env, context, { method: "POST", body: JSON.stringify(input) }), 200, requestId);
+      }
+      if (url.pathname === "/attachment-link") {
+        const input = TaskAttachmentLink.parse(await body(request));
+        return json(await call(env.DATA, "/attachments/link", env, context, { method: "POST", body: JSON.stringify(input) }), 200, requestId);
+      }
+      if (url.pathname === "/attachment-open") {
+        const input = RecordId.parse(await body(request));
+        return json(await call(env.DATA, "/attachments/open", env, context, { method: "POST", body: JSON.stringify(input) }), 200, requestId);
+      }
+      if (url.pathname === "/attachment-delete") {
+        const input = RecordId.parse(await body(request));
+        return json(await call(env.DATA, "/attachments/delete", env, context, { method: "POST", body: JSON.stringify(input) }), 200, requestId);
       }
       if (url.pathname === "/dashboard")
         return json(

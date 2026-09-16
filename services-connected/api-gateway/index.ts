@@ -33,6 +33,12 @@ const routes: Array<[string, RegExp, keyof Env, string]> = [
   ["GET", /^\/v1\/tasks\/details$/, "TASKS", "/details"],
   ["POST", /^\/v1\/tasks\/checklist\/save$/, "TASKS", "/checklist-save"],
   ["POST", /^\/v1\/tasks\/checklist\/delete$/, "TASKS", "/checklist-delete"],
+  ["POST", /^\/v1\/tasks\/delete$/, "TASKS", "/delete"],
+  ["GET", /^\/v1\/tasks\/attachments$/, "TASKS", "/attachments"],
+  ["POST", /^\/v1\/tasks\/attachments\/upload$/, "TASKS", "/attachment-upload"],
+  ["POST", /^\/v1\/tasks\/attachments\/link$/, "TASKS", "/attachment-link"],
+  ["POST", /^\/v1\/tasks\/attachments\/open$/, "TASKS", "/attachment-open"],
+  ["POST", /^\/v1\/tasks\/attachments\/delete$/, "TASKS", "/attachment-delete"],
   ["GET", /^\/v1\/dashboard$/, "TASKS", "/dashboard"],
   ["GET", /^\/v1\/calendar$/, "TASKS", "/calendar"],
   ["GET", /^\/v1\/projects$/, "TASKS", "/projects"],
@@ -190,7 +196,7 @@ export default <WorkerHandler<Env>>{
           404,
         );
       const binding = env[route[2]] as unknown as Fetcher,
-        limit = url.pathname.startsWith("/v1/backup/import-")
+        limit = url.pathname.startsWith("/v1/backup/import-") || url.pathname === "/v1/tasks/attachments/upload"
           ? 8_500_000
           : 1_000_000,
         payload =

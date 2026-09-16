@@ -71,6 +71,27 @@ describe('connected filters and notification persistence',()=>{
     expect(migration).toContain('task_status_refresh_dependents');
     expect(migration).toContain('on conflict(waiting_task_id, prerequisite_task_id) do update');
   });
+
+  it('provides private task files links and the requested task layouts',()=>{
+    const enhancements=read('apps/connected-web/src/ConnectedEnhancements.tsx');
+    const tasks=read('services-connected/tasks/index.ts');
+    const data=read('services-connected/data/index.ts');
+    expect(enhancements).toContain('Files, images, documents & links');
+    expect(enhancements).toContain('className="task-card-grid"');
+    expect(enhancements).toContain('Smart urgency');
+    expect(tasks).toContain('TaskAttachmentUpload.parse');
+    expect(data).toContain("'/attachments/upload'");
+    expect(data).toContain('/storage/v1/object/sign/task-attachments/');
+  });
+
+  it('offers server-side diagnostic detail levels',()=>{
+    const view=read('apps/connected-web/src/BackupDiagnosticsViews.tsx');
+    const diagnostics=read('services-connected/logging-diagnostics/index.ts');
+    expect(view).toContain('Debug');
+    expect(view).toContain('Verbose');
+    expect(view).toContain('Technical details');
+    expect(diagnostics).toContain("const levels=['error','warn','info','debug','verbose']");
+  });
 });
 
 describe('internal health endpoints',()=>{
