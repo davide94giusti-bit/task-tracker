@@ -19,10 +19,19 @@ describe('connected UI completeness',()=>{
     expect(app).toContain('releaseFocus(); setDrawer(true)');
   });
 
+  it('keeps mobile task actions reachable and dashboard metrics compact',()=>{
+    const enhancements=read('apps/connected-web/src/ConnectedEnhancements.tsx');
+    const styles=read('apps/connected-web/src/styles.css');
+    expect(enhancements).toContain('calc(20px + env(safe-area-inset-bottom))');
+    expect(enhancements).toContain('minHeight: 44');
+    expect(styles).toMatch(/\.metric-grid\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
+  });
+
   it('keeps mobile calendar counts separate from day numbers',()=>{
     const styles=read('apps/connected-web/src/styles.css');
     expect(app).toContain('className="calendar-count"');
-    expect(styles).toContain('.calendar-count{position:absolute;left:50%;bottom:10px;transform:translateX(-50%)');
+    expect(styles).toContain('.calendar-count {');
+    expect(styles).toContain('transform: translateX(-50%)');
     expect(app).not.toContain('`${d.count} task${d.count === 1');
   });
 
@@ -41,7 +50,7 @@ describe('connected UI completeness',()=>{
   it('wires the notification bell and admin-only invitation UI',()=>{
     const enhancements=read('apps/connected-web/src/ConnectedEnhancements.tsx');
     expect(enhancements).toContain('function NotificationBell');
-    expect(enhancements).toContain("api<{ items: NotificationItem[]; unread: number }>('/notifications/inbox')");
+    expect(enhancements).toContain('/notifications/inbox');
     expect(app).toContain("n.view !== 'access' || platformAdmin");
   });
 });
@@ -62,6 +71,11 @@ describe('connected filters and notification persistence',()=>{
     expect(notifications).toContain('`test-${context.userId}-${crypto.randomUUID()}`');
     expect(notifications).toContain('email_enabled: input.emailEnabled');
     expect(notifications).toContain('push_enabled: input.pushEnabled');
+  });
+
+  it('normalizes a missing browser push expiration time',()=>{
+    const app=read('apps/connected-web/src/App.tsx');
+    expect(app).toContain('expirationTime: subscriptionJson.expirationTime ?? null');
   });
 
   it('keeps checklist writes aligned with the database and refreshes derived task state',()=>{

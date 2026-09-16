@@ -242,7 +242,8 @@ return <>
         if (permission !== 'granted') throw new Error('The notification permission request was dismissed.');
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey(import.meta.env.VITE_VAPID_PUBLIC_KEY) as BufferSource });
-        await api('/push/subscribe', { method: 'POST', body: { ...subscription.toJSON(), deviceLabel: navigator.userAgent.slice(0, 100) } });
+        const subscriptionJson = subscription.toJSON();
+        await api('/push/subscribe', { method: 'POST', body: { ...subscriptionJson, expirationTime: subscriptionJson.expirationTime ?? null, deviceLabel: navigator.userAgent.slice(0, 100) } });
         await savePreferences({...preferences,pushEnabled:true});
         setMessage('Live notifications are enabled on this device.');
     }

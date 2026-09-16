@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Alert, Avatar, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox,
-  Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField,
-  ToggleButton, ToggleButtonGroup, Tooltip, Typography,
-} from '@mui/material';
+import { Alert, Avatar, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { Add, AttachFile, Delete, Edit, Link as LinkIcon, NotificationsActive, OpenInNew, Refresh, TableRows, ViewModule } from '@mui/icons-material';
 import { api } from './api';
 import type { ChecklistItem, Dashboard, NotificationItem, Person, Project, Task, TaskAttachment, TaskDependency, View } from './types';
@@ -16,114 +10,1039 @@ function titleFor(view: View, override?: string) {
   return view[0].toUpperCase() + view.slice(1);
 }
 
-export function EnhancedTasksView({ view, query, title, onOpen, onNew }: {
-  view: View; query?: Record<string, unknown>; title?: string;
-  onOpen: (task: Task) => void; onNew: () => void;
-}) {
+export function EnhancedTasksView({ view, query, title, onOpen, onNew }: { view: View; query?: Record<string, unknown>; title?: string; onOpen: (task: Task) => void; onNew: () => void }) {
   const [data, setData] = useState<{ items: Task[]; total: number } | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]), [people, setPeople] = useState<Person[]>([]);
-  const [error, setError] = useState(''), [layout, setLayout] = useState<'cards' | 'table'>('cards'), [urgency, setUrgency] = useState('smart'), [selected, setSelected] = useState<string[]>([]);
-  const [filters, setFilters] = useState({ search: '', projectId: '', responsiblePersonId: '', status: '', priority: '' });
+  const [projects, setProjects] = useState<Project[]>([]),
+    [people, setPeople] = useState<Person[]>([]);
+  const [error, setError] = useState(''),
+    [layout, setLayout] = useState<'cards' | 'table'>('cards'),
+    [urgency, setUrgency] = useState('smart'),
+    [selected, setSelected] = useState<string[]>([]);
+  const [filters, setFilters] = useState({
+    search: '',
+    projectId: '',
+    responsiblePersonId: '',
+    status: '',
+    priority: ''
+  });
   const load = useCallback(async () => {
-    setError(''); setData(null);
+    setError('');
+    setData(null);
     try {
-      const merged = { view: view === 'tasks' ? 'all' : view, ...query, ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)) } as Record<string, string>;
-      const [tasks, projectRows, peopleRows] = await Promise.all([
-        api<{ items: Task[]; total: number }>(`/tasks?${new URLSearchParams(merged)}`),
-        api<Project[]>('/projects'), api<Person[]>('/people'),
-      ]);
-      setData(tasks); setProjects(projectRows); setPeople(peopleRows);
-    } catch (reason) { setError((reason as Error).message); }
+      const merged = {
+        view: view === 'tasks' ? 'all' : view,
+        ...query,
+        ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value))
+      } as Record<string, string>;
+      const [tasks, projectRows, peopleRows] = await Promise.all([api<{ items: Task[]; total: number }>(`/tasks?${new URLSearchParams(merged)}`), api<Project[]>('/projects'), api<Person[]>('/people')]);
+      setData(tasks);
+      setProjects(projectRows);
+      setPeople(peopleRows);
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
   }, [view, JSON.stringify(query), JSON.stringify(filters)]);
-  useEffect(() => { void load(); }, [load]);
-  const priorityColor = (task: Task) => task.priority === 'critical' ? '#dc2626' : task.priority === 'high' ? '#f97316' : task.priority === 'low' ? '#16a34a' : '#2563eb';
-  const sorted = useMemo(() => [...(data?.items || [])].sort((a,b) => { if(urgency==='due') return (a.dueDate||'9999').localeCompare(b.dueDate||'9999'); if(urgency==='priority'){const order=['critical','high','medium','low','none'];return order.indexOf(a.priority)-order.indexOf(b.priority)} if(urgency==='updated') return b.updatedAt.localeCompare(a.updatedAt); const now=new Date().toISOString().slice(0,10),score=(task:Task)=>(task.dueDate&&task.dueDate<now?0:task.priority==='critical'?1:task.priority==='high'?2:task.dueDate||'9999');return String(score(a)).localeCompare(String(score(b))); }), [data,urgency]);
-  const formatDue = (value?:string|null) => value ? new Date(`${value}T12:00:00`).toLocaleDateString() : 'No due date';
-  const remove = async (task:Task) => { if(!confirm(`Move “${task.title}” to Trash?`)) return; try{await api('/tasks/delete',{method:'POST',body:{id:task.id}});await load();}catch(reason){setError((reason as Error).message)} };
-  const progress = (task:Task) => Math.max(0,Math.min(100,task.calculatedProgress||0));
-  const cards = sorted.map(task => <Card key={task.id} variant="outlined" sx={{borderLeft:`4px solid ${priorityColor(task)}`,minHeight:178}}><CardActionArea onClick={() => onOpen(task)} sx={{height:'100%'}}><CardContent sx={{height:'100%',display:'flex',flexDirection:'column'}}>
-    <Stack direction="row" justifyContent="space-between" alignItems="center"><Chip size="small" label={task.priority} sx={{textTransform:'capitalize',bgcolor:priorityColor(task),color:'#08111f',fontWeight:800}}/><Typography variant="caption" fontWeight={700}>{formatDue(task.dueDate)}</Typography></Stack>
-    <Typography variant="h6" mt={1.5} lineHeight={1.2}>{task.title}</Typography><Typography variant="body2" color="text.secondary" sx={{minHeight:34}}>{task.description||'No description'}</Typography>
-    <Box mt="auto"><LinearProgress variant="determinate" value={progress(task)} sx={{height:7,borderRadius:4,'& .MuiLinearProgress-bar':{bgcolor:priorityColor(task)}}}/><Stack direction="row" justifyContent="space-between" mt={.75}><Typography variant="caption" sx={{textTransform:'capitalize'}}>{task.status.replaceAll('_',' ')}</Typography><Typography variant="caption" fontWeight={700}>{progress(task)}%</Typography></Stack></Box>
-  </CardContent></CardActionArea></Card>);
-  return <>
-    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} gap={2} mb={3}><Box><Typography variant="h4">{titleFor(view, title)}</Typography><Typography color="text.secondary">{data ? `${data.total} matching tasks` : 'Loading validated cloud tasks'}</Typography></Box><Button variant="contained" startIcon={<Add/>} onClick={onNew}>New task</Button></Stack>
-    <Paper variant="outlined" sx={{p:1.25,mb:2}}><Stack direction={{ xs:'column',md:'row' }} spacing={1} alignItems={{md:'center'}}>
-      <TextField select size="small" value={filters.priority} onChange={event=>setFilters(value=>({...value,priority:event.target.value}))} sx={{minWidth:140}}><MenuItem value="">All priorities</MenuItem>{['critical','high','medium','low','none'].map(value=><MenuItem key={value} value={value}>{value}</MenuItem>)}</TextField>
-      <TextField select size="small" value={filters.projectId} onChange={event=>setFilters(value=>({...value,projectId:event.target.value}))} sx={{minWidth:180}}><MenuItem value="">All projects</MenuItem>{projects.map(project=><MenuItem key={project.id} value={project.id}>{project.name}</MenuItem>)}</TextField>
-      <TextField select size="small" value={urgency} onChange={event=>setUrgency(event.target.value)} sx={{minWidth:150}}><MenuItem value="smart">Smart urgency</MenuItem><MenuItem value="due">Due date</MenuItem><MenuItem value="priority">Priority</MenuItem><MenuItem value="updated">Recently updated</MenuItem></TextField>
-      <Box flex={1}/><ToggleButtonGroup exclusive size="small" value={layout} onChange={(_,value)=>value&&setLayout(value)} aria-label="Task layout"><ToggleButton value="table" aria-label="Table view"><TableRows sx={{mr:.5}}/>Table</ToggleButton><ToggleButton value="cards" aria-label="Card view"><ViewModule sx={{mr:.5}}/>Cards</ToggleButton></ToggleButtonGroup><Tooltip title="Refresh tasks"><IconButton onClick={load}><Refresh/></IconButton></Tooltip>
-    </Stack><Stack direction={{xs:'column',md:'row'}} spacing={1} mt={1}><TextField size="small" label="Search" value={filters.search} onChange={event=>setFilters(value=>({...value,search:event.target.value}))}/><TextField select size="small" label="Person" value={filters.responsiblePersonId} onChange={event=>setFilters(value=>({...value,responsiblePersonId:event.target.value}))} sx={{minWidth:180}}><MenuItem value="">All people</MenuItem>{people.map(person=><MenuItem key={person.id} value={person.id}>{person.fullName}</MenuItem>)}</TextField><TextField select size="small" label="Status" value={filters.status} onChange={event=>setFilters(value=>({...value,status:event.target.value}))} sx={{minWidth:150}}><MenuItem value="">All statuses</MenuItem>{['not_started','in_progress','waiting','blocked','completed'].map(value=><MenuItem key={value} value={value}>{value.replaceAll('_',' ')}</MenuItem>)}</TextField></Stack></Paper>
-    {error && <Alert severity="error" action={<Button onClick={load}>Retry</Button>}>{error}</Alert>}
-    {!data && !error && <LinearProgress/>}
-    {data?.items.length === 0 && <Paper sx={{ p: 4, textAlign: 'center' }}><Typography variant="h6">No tasks match these filters</Typography></Paper>}
-    {layout === 'cards' ? <Box className="task-card-grid">{cards}</Box> : data && sorted.length > 0 && <TableContainer component={Paper} variant="outlined"><Table><TableHead><TableRow><TableCell padding="checkbox"><Checkbox checked={selected.length===sorted.length&&!!sorted.length} indeterminate={selected.length>0&&selected.length<sorted.length} onChange={event=>setSelected(event.target.checked?sorted.map(task=>task.id):[])}/></TableCell><TableCell>Task</TableCell><TableCell>Status</TableCell><TableCell>Priority</TableCell><TableCell sx={{minWidth:230}}>Progress</TableCell><TableCell>Due date</TableCell><TableCell align="right">Actions</TableCell></TableRow></TableHead><TableBody>{sorted.map(task=><TableRow hover key={task.id} onClick={()=>onOpen(task)} sx={{cursor:'pointer','& td:first-of-type':{borderLeft:`4px solid ${priorityColor(task)}`}}}><TableCell padding="checkbox" onClick={event=>event.stopPropagation()}><Checkbox checked={selected.includes(task.id)} onChange={event=>setSelected(value=>event.target.checked?[...value,task.id]:value.filter(id=>id!==task.id))}/></TableCell><TableCell><Typography fontWeight={800}>{task.title}</Typography><Typography variant="caption" color="text.secondary">{task.description||'No description'}</Typography></TableCell><TableCell><Chip size="small" variant="outlined" color="primary" label={task.status.replaceAll('_',' ')}/></TableCell><TableCell><Chip size="small" label={task.priority} sx={{textTransform:'capitalize',bgcolor:priorityColor(task),color:'#08111f',fontWeight:800,minWidth:90}}/></TableCell><TableCell><Stack direction="row" justifyContent="space-between"><Typography variant="caption">{progress(task)}%</Typography><Typography variant="caption">{task.checklistCompleted||0}/{task.checklistTotal||0}</Typography></Stack><LinearProgress variant="determinate" value={progress(task)} sx={{height:6,borderRadius:3,'& .MuiLinearProgress-bar':{bgcolor:priorityColor(task)}}}/></TableCell><TableCell>{formatDue(task.dueDate)}</TableCell><TableCell align="right" onClick={event=>event.stopPropagation()}><Tooltip title="Edit"><IconButton onClick={()=>onOpen(task)}><Edit/></IconButton></Tooltip><Tooltip title="Move to Trash"><IconButton onClick={()=>void remove(task)}><Delete/></IconButton></Tooltip></TableCell></TableRow>)}</TableBody></Table></TableContainer>}
-  </>;
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const priorityColor = (task: Task) => (task.priority === 'critical' ? '#dc2626' : task.priority === 'high' ? '#f97316' : task.priority === 'low' ? '#16a34a' : '#2563eb');
+  const sorted = useMemo(
+    () =>
+      [...(data?.items || [])].sort((a, b) => {
+        if (urgency === 'due') return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
+        if (urgency === 'priority') {
+          const order = ['critical', 'high', 'medium', 'low', 'none'];
+          return order.indexOf(a.priority) - order.indexOf(b.priority);
+        }
+        if (urgency === 'updated') return b.updatedAt.localeCompare(a.updatedAt);
+        const now = new Date().toISOString().slice(0, 10),
+          score = (task: Task) => (task.dueDate && task.dueDate < now ? 0 : task.priority === 'critical' ? 1 : task.priority === 'high' ? 2 : task.dueDate || '9999');
+        return String(score(a)).localeCompare(String(score(b)));
+      }),
+    [data, urgency]
+  );
+  const formatDue = (value?: string | null) => (value ? new Date(`${value}T12:00:00`).toLocaleDateString() : 'No due date');
+  const remove = async (task: Task) => {
+    if (!confirm(`Move “${task.title}” to Trash?`)) return;
+    try {
+      await api('/tasks/delete', { method: 'POST', body: { id: task.id } });
+      await load();
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  };
+  const progress = (task: Task) => Math.max(0, Math.min(100, task.calculatedProgress || 0));
+  const cards = sorted.map((task) => (
+    <Card key={task.id} variant="outlined" sx={{ borderLeft: `4px solid ${priorityColor(task)}`, minHeight: 178 }}>
+      <CardActionArea onClick={() => onOpen(task)} sx={{ height: '100%' }}>
+        <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Chip
+              size="small"
+              label={task.priority}
+              sx={{
+                textTransform: 'capitalize',
+                bgcolor: priorityColor(task),
+                color: '#08111f',
+                fontWeight: 800
+              }}
+            />
+            <Typography variant="caption" fontWeight={700}>
+              {formatDue(task.dueDate)}
+            </Typography>
+          </Stack>
+          <Typography variant="h6" mt={1.5} lineHeight={1.2}>
+            {task.title}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ minHeight: 34 }}>
+            {task.description || 'No description'}
+          </Typography>
+          <Box mt="auto">
+            <LinearProgress
+              variant="determinate"
+              value={progress(task)}
+              sx={{
+                height: 7,
+                borderRadius: 4,
+                '& .MuiLinearProgress-bar': { bgcolor: priorityColor(task) }
+              }}
+            />
+            <Stack direction="row" justifyContent="space-between" mt={0.75}>
+              <Typography variant="caption" sx={{ textTransform: 'capitalize' }}>
+                {task.status.replaceAll('_', ' ')}
+              </Typography>
+              <Typography variant="caption" fontWeight={700}>
+                {progress(task)}%
+              </Typography>
+            </Stack>
+          </Box>
+        </CardContent>
+      </CardActionArea>
+    </Card>
+  ));
+  return (
+    <>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} gap={2} mb={3}>
+        <Box>
+          <Typography variant="h4">{titleFor(view, title)}</Typography>
+          <Typography color="text.secondary">{data ? `${data.total} matching tasks` : 'Loading validated cloud tasks'}</Typography>
+        </Box>
+        <Button variant="contained" startIcon={<Add />} onClick={onNew}>
+          New task
+        </Button>
+      </Stack>
+      <Paper variant="outlined" sx={{ p: 1.25, mb: 2 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
+          <TextField
+            select
+            size="small"
+            value={filters.priority}
+            onChange={(event) =>
+              setFilters((value) => ({
+                ...value,
+                priority: event.target.value
+              }))
+            }
+            sx={{ minWidth: 140 }}
+          >
+            <MenuItem value="">All priorities</MenuItem>
+            {['critical', 'high', 'medium', 'low', 'none'].map((value) => (
+              <MenuItem key={value} value={value}>
+                {value}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            value={filters.projectId}
+            onChange={(event) =>
+              setFilters((value) => ({
+                ...value,
+                projectId: event.target.value
+              }))
+            }
+            sx={{ minWidth: 180 }}
+          >
+            <MenuItem value="">All projects</MenuItem>
+            {projects.map((project) => (
+              <MenuItem key={project.id} value={project.id}>
+                {project.name}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField select size="small" value={urgency} onChange={(event) => setUrgency(event.target.value)} sx={{ minWidth: 150 }}>
+            <MenuItem value="smart">Smart urgency</MenuItem>
+            <MenuItem value="due">Due date</MenuItem>
+            <MenuItem value="priority">Priority</MenuItem>
+            <MenuItem value="updated">Recently updated</MenuItem>
+          </TextField>
+          <Box flex={1} />
+          <ToggleButtonGroup exclusive size="small" value={layout} onChange={(_, value) => value && setLayout(value)} aria-label="Task layout">
+            <ToggleButton value="table" aria-label="Table view">
+              <TableRows sx={{ mr: 0.5 }} />
+              Table
+            </ToggleButton>
+            <ToggleButton value="cards" aria-label="Card view">
+              <ViewModule sx={{ mr: 0.5 }} />
+              Cards
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <Tooltip title="Refresh tasks">
+            <IconButton onClick={load}>
+              <Refresh />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} mt={1}>
+          <TextField size="small" label="Search" value={filters.search} onChange={(event) => setFilters((value) => ({ ...value, search: event.target.value }))} />
+          <TextField
+            select
+            size="small"
+            label="Person"
+            value={filters.responsiblePersonId}
+            onChange={(event) =>
+              setFilters((value) => ({
+                ...value,
+                responsiblePersonId: event.target.value
+              }))
+            }
+            sx={{ minWidth: 180 }}
+          >
+            <MenuItem value="">All people</MenuItem>
+            {people.map((person) => (
+              <MenuItem key={person.id} value={person.id}>
+                {person.fullName}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField select size="small" label="Status" value={filters.status} onChange={(event) => setFilters((value) => ({ ...value, status: event.target.value }))} sx={{ minWidth: 150 }}>
+            <MenuItem value="">All statuses</MenuItem>
+            {['not_started', 'in_progress', 'waiting', 'blocked', 'completed'].map((value) => (
+              <MenuItem key={value} value={value}>
+                {value.replaceAll('_', ' ')}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Stack>
+      </Paper>
+      {error && (
+        <Alert severity="error" action={<Button onClick={load}>Retry</Button>}>
+          {error}
+        </Alert>
+      )}
+      {!data && !error && <LinearProgress />}
+      {data?.items.length === 0 && (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="h6">No tasks match these filters</Typography>
+        </Paper>
+      )}
+      {layout === 'cards' ? (
+        <Box className="task-card-grid">{cards}</Box>
+      ) : (
+        data &&
+        sorted.length > 0 && (
+          <TableContainer component={Paper} variant="outlined">
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox">
+                    <Checkbox checked={selected.length === sorted.length && !!sorted.length} indeterminate={selected.length > 0 && selected.length < sorted.length} onChange={(event) => setSelected(event.target.checked ? sorted.map((task) => task.id) : [])} />
+                  </TableCell>
+                  <TableCell>Task</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Priority</TableCell>
+                  <TableCell sx={{ minWidth: 230 }}>Progress</TableCell>
+                  <TableCell>Due date</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {sorted.map((task) => (
+                  <TableRow
+                    hover
+                    key={task.id}
+                    onClick={() => onOpen(task)}
+                    sx={{
+                      cursor: 'pointer',
+                      '& td:first-of-type': {
+                        borderLeft: `4px solid ${priorityColor(task)}`
+                      }
+                    }}
+                  >
+                    <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
+                      <Checkbox checked={selected.includes(task.id)} onChange={(event) => setSelected((value) => (event.target.checked ? [...value, task.id] : value.filter((id) => id !== task.id)))} />
+                    </TableCell>
+                    <TableCell>
+                      <Typography fontWeight={800}>{task.title}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {task.description || 'No description'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip size="small" variant="outlined" color="primary" label={task.status.replaceAll('_', ' ')} />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={task.priority}
+                        sx={{
+                          textTransform: 'capitalize',
+                          bgcolor: priorityColor(task),
+                          color: '#08111f',
+                          fontWeight: 800,
+                          minWidth: 90
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Stack direction="row" justifyContent="space-between">
+                        <Typography variant="caption">{progress(task)}%</Typography>
+                        <Typography variant="caption">
+                          {task.checklistCompleted || 0}/{task.checklistTotal || 0}
+                        </Typography>
+                      </Stack>
+                      <LinearProgress
+                        variant="determinate"
+                        value={progress(task)}
+                        sx={{
+                          height: 6,
+                          borderRadius: 3,
+                          '& .MuiLinearProgress-bar': {
+                            bgcolor: priorityColor(task)
+                          }
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>{formatDue(task.dueDate)}</TableCell>
+                    <TableCell align="right" onClick={(event) => event.stopPropagation()}>
+                      <Tooltip title="Edit">
+                        <IconButton onClick={() => onOpen(task)}>
+                          <Edit />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Move to Trash">
+                        <IconButton onClick={() => void remove(task)}>
+                          <Delete />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )
+      )}
+    </>
+  );
 }
 
 export function EnhancedDashboardView({ openFilter }: { openFilter: (title: string, query: Record<string, unknown>) => void }) {
-  const [data, setData] = useState<Dashboard | null>(null), [projects, setProjects] = useState<Project[]>([]), [error, setError] = useState('');
-  useEffect(() => { Promise.all([api<Dashboard>('/dashboard'), api<Project[]>('/projects')]).then(([dashboard, projectRows]) => { setData(dashboard); setProjects(projectRows); }).catch(reason => setError(reason.message)); }, []);
-  const cards = [['Overdue','overdue',{ due:'overdue' }],['Due today','today',{ due:'today' }],['Next 7 days','next7',{ due:'next7' }],['Critical','critical',{ priority:'critical' }],['Blocked','blocked',{ blocked:'true' }],['Waiting','waiting',{ status:'waiting' }]] as const;
+  const [data, setData] = useState<Dashboard | null>(null),
+    [projects, setProjects] = useState<Project[]>([]),
+    [error, setError] = useState('');
+  useEffect(() => {
+    Promise.all([api<Dashboard>('/dashboard'), api<Project[]>('/projects')])
+      .then(([dashboard, projectRows]) => {
+        setData(dashboard);
+        setProjects(projectRows);
+      })
+      .catch((reason) => setError(reason.message));
+  }, []);
+  const cards = [
+    ['Overdue', 'overdue', { due: 'overdue' }],
+    ['Due today', 'today', { due: 'today' }],
+    ['Next 7 days', 'next7', { due: 'next7' }],
+    ['Critical', 'critical', { priority: 'critical' }],
+    ['Blocked', 'blocked', { blocked: 'true' }],
+    ['Waiting', 'waiting', { status: 'waiting' }]
+  ] as const;
   if (error) return <Alert severity="error">{error}</Alert>;
-  return <><Box mb={3}><Typography variant="h4">Dashboard</Typography><Typography color="text.secondary">A calm overview of what needs your attention.</Typography></Box>{!data ? <LinearProgress/> : <>
-    <Box className="metric-grid">{cards.map(([label,key,query]) => <Card key={key}><CardActionArea onClick={() => openFilter(label, query)}><CardContent><Stack direction="row" justifyContent="space-between"><Box><Typography color="text.secondary">{label}</Typography><Typography variant="h4">{data.counts[key] || 0}</Typography></Box><Avatar sx={{ bgcolor:'action.hover' }}>{label[0]}</Avatar></Stack></CardContent></CardActionArea></Card>)}</Box>
-    <Card sx={{ mt:2 }}><CardActionArea onClick={() => openFilter('Overall workload', {})}><CardContent><Stack direction="row" justifyContent="space-between"><Box><Typography variant="h6">Overall workload</Typography><Typography color="text.secondary">Average progress across active tasks</Typography></Box><Typography variant="h5">{data.overallProgress}%</Typography></Stack><LinearProgress variant="determinate" value={data.overallProgress} sx={{ mt:2,height:10,borderRadius:5 }}/></CardContent></CardActionArea></Card>
-    <Card sx={{ mt:2 }}><CardContent><Typography variant="h6">Progress by project</Typography><Typography color="text.secondary" mb={2}>Select a project to open its tasks.</Typography><Stack spacing={1.5}>{projects.length ? projects.map(project => <CardActionArea key={project.id} onClick={() => openFilter(project.name,{ projectId:project.id })} sx={{ borderRadius:1,p:1 }}><Stack direction="row" alignItems="center" spacing={1.5}><Box sx={{ width:120 }}><Typography fontWeight={700} noWrap>{project.name}</Typography><Typography variant="caption">{project.activeTasks} active</Typography></Box><Box flex={1}><LinearProgress variant="determinate" value={project.progress || 0} sx={{ height:12,borderRadius:6,'& .MuiLinearProgress-bar':{ bgcolor:project.color } }}/></Box><Typography width={45} textAlign="right">{project.progress || 0}%</Typography></Stack></CardActionArea>) : <Typography color="text.secondary">Create a project to see project progress.</Typography>}</Stack></CardContent></Card>
-  </>}</>;
+  return (
+    <>
+      <Box mb={3}>
+        <Typography variant="h4">Dashboard</Typography>
+        <Typography color="text.secondary">A calm overview of what needs your attention.</Typography>
+      </Box>
+      {!data ? (
+        <LinearProgress />
+      ) : (
+        <>
+          <Box className="metric-grid">
+            {cards.map(([label, key, query]) => (
+              <Card key={key}>
+                <CardActionArea onClick={() => openFilter(label, query)}>
+                  <CardContent>
+                    <Stack direction="row" justifyContent="space-between">
+                      <Box>
+                        <Typography color="text.secondary">{label}</Typography>
+                        <Typography variant="h4">{data.counts[key] || 0}</Typography>
+                      </Box>
+                      <Avatar sx={{ bgcolor: 'action.hover' }}>{label[0]}</Avatar>
+                    </Stack>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            ))}
+          </Box>
+          <Card sx={{ mt: 2 }}>
+            <CardActionArea onClick={() => openFilter('Overall workload', {})}>
+              <CardContent>
+                <Stack direction="row" justifyContent="space-between">
+                  <Box>
+                    <Typography variant="h6">Overall workload</Typography>
+                    <Typography color="text.secondary">Average progress across active tasks</Typography>
+                  </Box>
+                  <Typography variant="h5">{data.overallProgress}%</Typography>
+                </Stack>
+                <LinearProgress variant="determinate" value={data.overallProgress} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
+              </CardContent>
+            </CardActionArea>
+          </Card>
+          <Card sx={{ mt: 2 }}>
+            <CardContent>
+              <Typography variant="h6">Progress by project</Typography>
+              <Typography color="text.secondary" mb={2}>
+                Select a project to open its tasks.
+              </Typography>
+              <Stack spacing={1.5}>
+                {projects.length ? (
+                  projects.map((project) => (
+                    <CardActionArea key={project.id} onClick={() => openFilter(project.name, { projectId: project.id })} sx={{ borderRadius: 1, p: 1 }}>
+                      <Stack direction="row" alignItems="center" spacing={1.5}>
+                        <Box sx={{ width: 120 }}>
+                          <Typography fontWeight={700} noWrap>
+                            {project.name}
+                          </Typography>
+                          <Typography variant="caption">{project.activeTasks} active</Typography>
+                        </Box>
+                        <Box flex={1}>
+                          <LinearProgress
+                            variant="determinate"
+                            value={project.progress || 0}
+                            sx={{
+                              height: 12,
+                              borderRadius: 6,
+                              '& .MuiLinearProgress-bar': {
+                                bgcolor: project.color
+                              }
+                            }}
+                          />
+                        </Box>
+                        <Typography width={45} textAlign="right">
+                          {project.progress || 0}%
+                        </Typography>
+                      </Stack>
+                    </CardActionArea>
+                  ))
+                ) : (
+                  <Typography color="text.secondary">Create a project to see project progress.</Typography>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </>
+  );
 }
 
 export function NotificationBell() {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null), [items, setItems] = useState<NotificationItem[]>([]), [unread, setUnread] = useState(0);
-  const load = useCallback(() => api<{ items: NotificationItem[]; unread: number }>('/notifications/inbox').then(data => { setItems(data.items); setUnread(data.unread); }).catch(() => undefined), []);
-  useEffect(() => { void load(); const timer = setInterval(load, 60_000); return () => clearInterval(timer); }, [load]);
-  const read = async (item: NotificationItem) => { if (!item.readAt) { await api('/notifications/read',{ method:'POST',body:{ id:item.id } }); await load(); } };
-  return <><Tooltip title="Notifications"><IconButton aria-label={`${unread} unread notifications`} onClick={event => { setAnchor(event.currentTarget); void load(); }}><Badge badgeContent={unread} color="error"><NotificationsActive/></Badge></IconButton></Tooltip><Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} slotProps={{ paper:{ sx:{ width:340,maxWidth:'90vw',maxHeight:420 } } }}><MenuItem disabled><Typography fontWeight={800}>Notifications</Typography></MenuItem>{items.length ? items.map(item => <MenuItem key={item.id} onClick={() => void read(item)} sx={{ whiteSpace:'normal',alignItems:'flex-start' }}><Box><Typography fontWeight={item.readAt ? 400 : 800}>{item.kind === 'reminder' ? 'Task reminder' : item.kind}</Typography><Typography variant="body2" color="text.secondary">{new Date(item.createdAt).toLocaleString()} · {item.status}</Typography></Box></MenuItem>) : <MenuItem disabled>No notifications yet</MenuItem>}</Menu></>;
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null),
+    [items, setItems] = useState<NotificationItem[]>([]),
+    [unread, setUnread] = useState(0);
+  const load = useCallback(
+    () =>
+      api<{ items: NotificationItem[]; unread: number }>('/notifications/inbox')
+        .then((data) => {
+          setItems(data.items);
+          setUnread(data.unread);
+        })
+        .catch(() => undefined),
+    []
+  );
+  useEffect(() => {
+    void load();
+    const timer = setInterval(load, 60_000);
+    return () => clearInterval(timer);
+  }, [load]);
+  const read = async (item: NotificationItem) => {
+    if (!item.readAt) {
+      await api('/notifications/read', {
+        method: 'POST',
+        body: { id: item.id }
+      });
+      await load();
+    }
+  };
+  return (
+    <>
+      <Tooltip title="Notifications">
+        <IconButton
+          aria-label={`${unread} unread notifications`}
+          onClick={(event) => {
+            setAnchor(event.currentTarget);
+            void load();
+          }}
+        >
+          <Badge badgeContent={unread} color="error">
+            <NotificationsActive />
+          </Badge>
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={anchor}
+        open={!!anchor}
+        onClose={() => setAnchor(null)}
+        slotProps={{
+          paper: { sx: { width: 340, maxWidth: '90vw', maxHeight: 420 } }
+        }}
+      >
+        <MenuItem disabled>
+          <Typography fontWeight={800}>Notifications</Typography>
+        </MenuItem>
+        {items.length ? (
+          items.map((item) => (
+            <MenuItem key={item.id} onClick={() => void read(item)} sx={{ whiteSpace: 'normal', alignItems: 'flex-start' }}>
+              <Box>
+                <Typography fontWeight={item.readAt ? 400 : 800}>{item.kind === 'reminder' ? 'Task reminder' : item.kind}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {new Date(item.createdAt).toLocaleString()} · {item.status}
+                </Typography>
+              </Box>
+            </MenuItem>
+          ))
+        ) : (
+          <MenuItem disabled>No notifications yet</MenuItem>
+        )}
+      </Menu>
+    </>
+  );
 }
 
 export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile }: { task: Task | null; newDate: string | null; open: boolean; onClose: () => void; onSaved: () => void; mobile: boolean }) {
-  const [editor, setEditor] = useState({ title:'',description:'',status:'not_started',priority:'medium',dueDate:'',projectId:'',responsiblePersonId:'' });
-  const [checklist, setChecklist] = useState<ChecklistItem[]>([]), [dependencies, setDependencies] = useState<TaskDependency[]>([]), [deletedChecklist, setDeletedChecklist] = useState<string[]>([]), [deletedDependencies, setDeletedDependencies] = useState<string[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]), [people, setPeople] = useState<Person[]>([]), [tasks, setTasks] = useState<Task[]>([]), [checklistText, setChecklistText] = useState(''), [prerequisiteId, setPrerequisiteId] = useState('');
-  const [attachments,setAttachments]=useState<TaskAttachment[]>([]),[pendingFiles,setPendingFiles]=useState<File[]>([]),[linkLabel,setLinkLabel]=useState(''),[linkUrl,setLinkUrl]=useState(''),[pendingLinks,setPendingLinks]=useState<Array<{label:string;url:string}>>([]);
-  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [editor, setEditor] = useState({
+    title: '',
+    description: '',
+    status: 'not_started',
+    priority: 'medium',
+    dueDate: '',
+    projectId: '',
+    responsiblePersonId: ''
+  });
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([]),
+    [dependencies, setDependencies] = useState<TaskDependency[]>([]),
+    [deletedChecklist, setDeletedChecklist] = useState<string[]>([]),
+    [deletedDependencies, setDeletedDependencies] = useState<string[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]),
+    [people, setPeople] = useState<Person[]>([]),
+    [tasks, setTasks] = useState<Task[]>([]),
+    [checklistText, setChecklistText] = useState(''),
+    [prerequisiteId, setPrerequisiteId] = useState('');
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([]),
+    [pendingFiles, setPendingFiles] = useState<File[]>([]),
+    [linkLabel, setLinkLabel] = useState(''),
+    [linkUrl, setLinkUrl] = useState(''),
+    [pendingLinks, setPendingLinks] = useState<Array<{ label: string; url: string }>>([]);
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
   useEffect(() => {
     if (!open) return;
-    setEditor({ title:task?.title || '',description:task?.description || '',status:task?.status || 'not_started',priority:task?.priority || 'medium',dueDate:newDate || task?.dueDate || '',projectId:task?.projectId || '',responsiblePersonId:task?.responsiblePersonId || '' });
-    setChecklist([]); setDependencies([]); setDeletedChecklist([]); setDeletedDependencies([]); setAttachments([]);setPendingFiles([]);setPendingLinks([]);setLinkLabel('');setLinkUrl('');setError('');
-    Promise.all([api<Project[]>('/projects'),api<Person[]>('/people'),api<{items:Task[]}>('/tasks?view=all&pageSize=100')]).then(([projectRows,peopleRows,taskRows]) => { setProjects(projectRows); setPeople(peopleRows); setTasks(taskRows.items); });
-    if (task) api<{ checklist: ChecklistItem[]; dependencies: Omit<TaskDependency,'prerequisiteTitle'|'prerequisiteStatus'>[] }>(`/tasks/details?taskId=${task.id}`).then(details => { setChecklist(details.checklist); setDependencies(details.dependencies.map(dependency => { const prerequisite = tasks.find(item => item.id === dependency.prerequisiteTaskId); return { ...dependency, prerequisiteTitle:prerequisite?.title || 'Prerequisite task', prerequisiteStatus:prerequisite?.status || '' }; })); }).catch(reason => setError(reason.message));
-    if(task)api<TaskAttachment[]>(`/tasks/attachments?taskId=${task.id}`).then(setAttachments).catch(reason=>setError(reason.message));
+    setEditor({
+      title: task?.title || '',
+      description: task?.description || '',
+      status: task?.status || 'not_started',
+      priority: task?.priority || 'medium',
+      dueDate: newDate || task?.dueDate || '',
+      projectId: task?.projectId || '',
+      responsiblePersonId: task?.responsiblePersonId || ''
+    });
+    setChecklist([]);
+    setDependencies([]);
+    setDeletedChecklist([]);
+    setDeletedDependencies([]);
+    setAttachments([]);
+    setPendingFiles([]);
+    setPendingLinks([]);
+    setLinkLabel('');
+    setLinkUrl('');
+    setError('');
+    Promise.all([api<Project[]>('/projects'), api<Person[]>('/people'), api<{ items: Task[] }>('/tasks?view=all&pageSize=100')]).then(([projectRows, peopleRows, taskRows]) => {
+      setProjects(projectRows);
+      setPeople(peopleRows);
+      setTasks(taskRows.items);
+    });
+    if (task)
+      api<{
+        checklist: ChecklistItem[];
+        dependencies: Omit<TaskDependency, 'prerequisiteTitle' | 'prerequisiteStatus'>[];
+      }>(`/tasks/details?taskId=${task.id}`)
+        .then((details) => {
+          setChecklist(details.checklist);
+          setDependencies(
+            details.dependencies.map((dependency) => {
+              const prerequisite = tasks.find((item) => item.id === dependency.prerequisiteTaskId);
+              return {
+                ...dependency,
+                prerequisiteTitle: prerequisite?.title || 'Prerequisite task',
+                prerequisiteStatus: prerequisite?.status || ''
+              };
+            })
+          );
+        })
+        .catch((reason) => setError(reason.message));
+    if (task)
+      api<TaskAttachment[]>(`/tasks/attachments?taskId=${task.id}`)
+        .then(setAttachments)
+        .catch((reason) => setError(reason.message));
   }, [open, task?.id, newDate]);
-  useEffect(() => { setDependencies(value => value.map(dependency => { const prerequisite=tasks.find(item=>item.id===dependency.prerequisiteTaskId); return {...dependency,prerequisiteTitle:prerequisite?.title||dependency.prerequisiteTitle,prerequisiteStatus:prerequisite?.status||dependency.prerequisiteStatus}; })); }, [tasks]);
-  const addChecklist = () => { const description=checklistText.trim(); if (!description) return; setChecklist(value => [...value,{ description,completed:false,required:true,position:value.length }]); setChecklistText(''); };
-  const addDependency = () => { const prerequisite=tasks.find(item=>item.id===prerequisiteId); if (!prerequisite || dependencies.some(item=>item.prerequisiteTaskId===prerequisite.id)) return; setDependencies(value=>[...value,{ id:`new-${crypto.randomUUID()}`,waitingTaskId:task?.id||'',prerequisiteTaskId:prerequisite.id,mandatory:true,prerequisiteTitle:prerequisite.title,prerequisiteStatus:prerequisite.status }]); setPrerequisiteId(''); };
-  const addLink=()=>{const url=linkUrl.trim();if(!url.startsWith('https://')){setError('Task links must start with https://');return}setPendingLinks(value=>[...value,{label:linkLabel.trim()||url,url}]);setLinkLabel('');setLinkUrl('')};
-  const fileBase64=async(file:File)=>{const buffer=new Uint8Array(await file.arrayBuffer());let binary='';for(let offset=0;offset<buffer.length;offset+=0x8000)binary+=String.fromCharCode(...buffer.subarray(offset,offset+0x8000));return btoa(binary)};
-  const openAttachment=async(attachment:TaskAttachment)=>{try{const result=await api<{url:string}>('/tasks/attachments/open',{method:'POST',body:{id:attachment.id}});window.open(result.url,'_blank','noopener,noreferrer')}catch(reason){setError((reason as Error).message)}};
-  const deleteAttachment=async(attachment:TaskAttachment)=>{try{await api('/tasks/attachments/delete',{method:'POST',body:{id:attachment.id}});setAttachments(value=>value.filter(item=>item.id!==attachment.id))}catch(reason){setError((reason as Error).message)}};
-  const saveRelated = async (taskId:string) => {
-    await Promise.all(deletedChecklist.map(id=>api('/tasks/checklist/delete',{method:'POST',body:{id}})));
-    await Promise.all(checklist.map((item,index)=>api('/tasks/checklist/save',{method:'POST',body:{...item,taskId,position:index}})));
-    await Promise.all(deletedDependencies.map(id=>api('/dependencies/unlink',{method:'POST',body:{id}})));
-    await Promise.all(dependencies.filter(item=>!item.id.startsWith('new-')).map(item=>api('/dependencies/update',{method:'POST',body:{id:item.id,mandatory:item.mandatory}})));
-    await Promise.all(dependencies.filter(item=>item.id.startsWith('new-')).map(item=>api('/dependencies/link',{method:'POST',body:{waitingTaskId:taskId,prerequisiteTaskId:item.prerequisiteTaskId,mandatory:item.mandatory}})));
-    for(const file of pendingFiles){if(file.size>6*1024*1024)throw new Error(`${file.name} is larger than 6 MB.`);await api('/tasks/attachments/upload',{method:'POST',timeoutMs:60_000,body:{taskId,fileName:file.name,mimeType:file.type||'application/octet-stream',sizeBytes:file.size,base64Data:await fileBase64(file)}})}
-    for(const link of pendingLinks)await api('/tasks/attachments/link',{method:'POST',body:{taskId,...link}});
+  useEffect(() => {
+    setDependencies((value) =>
+      value.map((dependency) => {
+        const prerequisite = tasks.find((item) => item.id === dependency.prerequisiteTaskId);
+        return {
+          ...dependency,
+          prerequisiteTitle: prerequisite?.title || dependency.prerequisiteTitle,
+          prerequisiteStatus: prerequisite?.status || dependency.prerequisiteStatus
+        };
+      })
+    );
+  }, [tasks]);
+  const addChecklist = () => {
+    const description = checklistText.trim();
+    if (!description) return;
+    setChecklist((value) => [...value, { description, completed: false, required: true, position: value.length }]);
+    setChecklistText('');
+  };
+  const addDependency = () => {
+    const prerequisite = tasks.find((item) => item.id === prerequisiteId);
+    if (!prerequisite || dependencies.some((item) => item.prerequisiteTaskId === prerequisite.id)) return;
+    setDependencies((value) => [
+      ...value,
+      {
+        id: `new-${crypto.randomUUID()}`,
+        waitingTaskId: task?.id || '',
+        prerequisiteTaskId: prerequisite.id,
+        mandatory: true,
+        prerequisiteTitle: prerequisite.title,
+        prerequisiteStatus: prerequisite.status
+      }
+    ]);
+    setPrerequisiteId('');
+  };
+  const addLink = () => {
+    const url = linkUrl.trim();
+    if (!url.startsWith('https://')) {
+      setError('Task links must start with https://');
+      return;
+    }
+    setPendingLinks((value) => [...value, { label: linkLabel.trim() || url, url }]);
+    setLinkLabel('');
+    setLinkUrl('');
+  };
+  const fileBase64 = async (file: File) => {
+    const buffer = new Uint8Array(await file.arrayBuffer());
+    let binary = '';
+    for (let offset = 0; offset < buffer.length; offset += 0x8000) binary += String.fromCharCode(...buffer.subarray(offset, offset + 0x8000));
+    return btoa(binary);
+  };
+  const openAttachment = async (attachment: TaskAttachment) => {
+    try {
+      const result = await api<{ url: string }>('/tasks/attachments/open', {
+        method: 'POST',
+        body: { id: attachment.id }
+      });
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  };
+  const deleteAttachment = async (attachment: TaskAttachment) => {
+    try {
+      await api('/tasks/attachments/delete', {
+        method: 'POST',
+        body: { id: attachment.id }
+      });
+      setAttachments((value) => value.filter((item) => item.id !== attachment.id));
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  };
+  const saveRelated = async (taskId: string) => {
+    await Promise.all(deletedChecklist.map((id) => api('/tasks/checklist/delete', { method: 'POST', body: { id } })));
+    await Promise.all(
+      checklist.map((item, index) =>
+        api('/tasks/checklist/save', {
+          method: 'POST',
+          body: { ...item, taskId, position: index }
+        })
+      )
+    );
+    await Promise.all(deletedDependencies.map((id) => api('/dependencies/unlink', { method: 'POST', body: { id } })));
+    await Promise.all(
+      dependencies
+        .filter((item) => !item.id.startsWith('new-'))
+        .map((item) =>
+          api('/dependencies/update', {
+            method: 'POST',
+            body: { id: item.id, mandatory: item.mandatory }
+          })
+        )
+    );
+    await Promise.all(
+      dependencies
+        .filter((item) => item.id.startsWith('new-'))
+        .map((item) =>
+          api('/dependencies/link', {
+            method: 'POST',
+            body: {
+              waitingTaskId: taskId,
+              prerequisiteTaskId: item.prerequisiteTaskId,
+              mandatory: item.mandatory
+            }
+          })
+        )
+    );
+    for (const file of pendingFiles) {
+      if (file.size > 6 * 1024 * 1024) throw new Error(`${file.name} is larger than 6 MB.`);
+      await api('/tasks/attachments/upload', {
+        method: 'POST',
+        timeoutMs: 60_000,
+        body: {
+          taskId,
+          fileName: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          sizeBytes: file.size,
+          base64Data: await fileBase64(file)
+        }
+      });
+    }
+    for (const link of pendingLinks)
+      await api('/tasks/attachments/link', {
+        method: 'POST',
+        body: { taskId, ...link }
+      });
   };
   const save = async () => {
-    setBusy(true); setError('');
+    setBusy(true);
+    setError('');
     try {
-      const body = { title:editor.title.trim(),description:editor.description,status:editor.status,priority:editor.priority,dueDate:editor.dueDate||null,projectId:editor.projectId||null,responsiblePersonId:editor.responsiblePersonId||null };
-      let taskId=task?.id;
-      if (!taskId) { const initialStatus=(checklist.length||dependencies.length)&&editor.status==='completed'?'not_started':editor.status; const created=await api<Task>('/tasks/save',{method:'POST',body:{...body,status:initialStatus}}); taskId=created.id; await saveRelated(taskId); if(initialStatus!==editor.status)await api('/tasks/save',{method:'POST',body:{id:taskId,...body}}); }
-      else { await saveRelated(taskId); await api('/tasks/save',{method:'POST',body:{id:taskId,...body}}); }
+      const body = {
+        title: editor.title.trim(),
+        description: editor.description,
+        status: editor.status,
+        priority: editor.priority,
+        dueDate: editor.dueDate || null,
+        projectId: editor.projectId || null,
+        responsiblePersonId: editor.responsiblePersonId || null
+      };
+      let taskId = task?.id;
+      if (!taskId) {
+        const initialStatus = (checklist.length || dependencies.length) && editor.status === 'completed' ? 'not_started' : editor.status;
+        const created = await api<Task>('/tasks/save', {
+          method: 'POST',
+          body: { ...body, status: initialStatus }
+        });
+        taskId = created.id;
+        await saveRelated(taskId);
+        if (initialStatus !== editor.status)
+          await api('/tasks/save', {
+            method: 'POST',
+            body: { id: taskId, ...body }
+          });
+      } else {
+        await saveRelated(taskId);
+        await api('/tasks/save', {
+          method: 'POST',
+          body: { id: taskId, ...body }
+        });
+      }
       onSaved();
-    } catch (reason) { setError((reason as Error).message); } finally { setBusy(false); }
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
-  return <Dialog open={open} onClose={busy?undefined:onClose} fullScreen={mobile} fullWidth maxWidth="md"><DialogTitle>{task?'Task details':'Create task'}</DialogTitle><DialogContent><Stack spacing={2} mt={1}>{error&&<Alert severity="error">{error}</Alert>}<TextField label="Title" value={editor.title} onChange={event=>setEditor(value=>({...value,title:event.target.value}))}/><TextField multiline minRows={3} label="Description" value={editor.description} onChange={event=>setEditor(value=>({...value,description:event.target.value}))}/><Stack direction={{xs:'column',sm:'row'}} spacing={2}><TextField select fullWidth label="Status" value={editor.status} onChange={event=>setEditor(value=>({...value,status:event.target.value}))}>{['not_started','in_progress','waiting','completed'].map(value=><MenuItem key={value} value={value}>{value.replaceAll('_',' ')}</MenuItem>)}</TextField><TextField select fullWidth label="Priority" value={editor.priority} onChange={event=>setEditor(value=>({...value,priority:event.target.value}))}>{['critical','high','medium','low','none'].map(value=><MenuItem key={value} value={value}>{value}</MenuItem>)}</TextField></Stack><Stack direction={{xs:'column',sm:'row'}} spacing={2}><TextField select fullWidth label="Project" value={editor.projectId} onChange={event=>setEditor(value=>({...value,projectId:event.target.value}))}><MenuItem value="">No project</MenuItem>{projects.map(project=><MenuItem key={project.id} value={project.id}>{project.name}</MenuItem>)}</TextField><TextField select fullWidth label="Responsible person" value={editor.responsiblePersonId} onChange={event=>setEditor(value=>({...value,responsiblePersonId:event.target.value}))}><MenuItem value="">Unassigned</MenuItem>{people.map(person=><MenuItem key={person.id} value={person.id}>{person.fullName}</MenuItem>)}</TextField></Stack><TextField label="Due date" type="date" value={editor.dueDate} onChange={event=>setEditor(value=>({...value,dueDate:event.target.value}))} slotProps={{inputLabel:{shrink:true}}}/>
-    <Paper variant="outlined" sx={{p:2}}><Typography variant="h6">Checklist</Typography><Stack direction={{xs:'column',sm:'row'}} spacing={1} my={1}><TextField fullWidth size="small" label="New checklist item" value={checklistText} onChange={event=>setChecklistText(event.target.value)} onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();addChecklist();}}}/><Button startIcon={<Add/>} onClick={addChecklist}>Add</Button></Stack><Stack spacing={.5}>{checklist.map((item,index)=><Stack key={item.id||index} direction="row" alignItems="center"><Checkbox checked={item.completed} onChange={event=>setChecklist(value=>value.map((entry,i)=>i===index?{...entry,completed:event.target.checked}:entry))}/><Typography sx={{textDecoration:item.completed?'line-through':'none',flex:1}}>{item.description}</Typography><FormControlLabel control={<Checkbox size="small" checked={item.required} onChange={event=>setChecklist(value=>value.map((entry,i)=>i===index?{...entry,required:event.target.checked}:entry))}/>} label="Required"/><IconButton aria-label="Delete checklist item" onClick={()=>{if(item.id)setDeletedChecklist(value=>[...value,item.id!]);setChecklist(value=>value.filter((_,i)=>i!==index));}}><Delete/></IconButton></Stack>)}</Stack></Paper>
-    <Paper variant="outlined" sx={{p:2}}><Typography variant="h6">Dependencies</Typography><Stack direction={{xs:'column',sm:'row'}} spacing={1} my={1}><TextField select fullWidth size="small" label="Prerequisite task" value={prerequisiteId} onChange={event=>setPrerequisiteId(event.target.value)}><MenuItem value="">Choose a task</MenuItem>{tasks.filter(item=>item.id!==task?.id).map(item=><MenuItem key={item.id} value={item.id}>{item.title}</MenuItem>)}</TextField><Button startIcon={<Add/>} onClick={addDependency}>Link</Button></Stack><Stack spacing={1}>{dependencies.map((dependency,index)=><Stack key={dependency.id} direction="row" alignItems="center"><Box flex={1}><Typography fontWeight={700}>{dependency.prerequisiteTitle}</Typography><Typography variant="body2" color="text.secondary">{dependency.prerequisiteStatus.replaceAll('_',' ')||'Pending'} · {dependency.mandatory?'Required':'Optional'}</Typography></Box><FormControlLabel control={<Checkbox checked={dependency.mandatory} onChange={event=>setDependencies(value=>value.map((entry,i)=>i===index?{...entry,mandatory:event.target.checked}:entry))}/>} label="Required"/><IconButton aria-label="Remove dependency" onClick={()=>{if(!dependency.id.startsWith('new-'))setDeletedDependencies(value=>[...value,dependency.id]);setDependencies(value=>value.filter((_,i)=>i!==index));}}><Delete/></IconButton></Stack>)}</Stack></Paper>
-    <Paper variant="outlined" sx={{p:2}}><Typography variant="h6">Files, images, documents & links</Typography><Typography variant="body2" color="text.secondary" mb={1.5}>Files are private to this workspace. Maximum 6 MB each. Links must use HTTPS.</Typography><Stack direction={{xs:'column',sm:'row'}} spacing={1}><Button component="label" variant="outlined" startIcon={<AttachFile/>}>Add files<input hidden multiple type="file" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/csv,application/zip,.docx,.xlsx,.pptx" onChange={event=>{const files=Array.from(event.target.files||[]);setPendingFiles(value=>[...value,...files]);event.currentTarget.value=''}}/></Button><TextField size="small" label="Link label" value={linkLabel} onChange={event=>setLinkLabel(event.target.value)}/><TextField size="small" fullWidth label="https:// link" value={linkUrl} onChange={event=>setLinkUrl(event.target.value)}/><Button startIcon={<LinkIcon/>} disabled={!linkUrl.trim()} onClick={addLink}>Add link</Button></Stack><Stack mt={1} spacing={.5}>{attachments.map(attachment=><Stack key={attachment.id} direction="row" alignItems="center"><AttachFile fontSize="small"/><Typography flex={1} ml={1}>{attachment.displayName}</Typography><IconButton aria-label="Open attachment" onClick={()=>void openAttachment(attachment)}><OpenInNew/></IconButton><IconButton aria-label="Delete attachment" onClick={()=>void deleteAttachment(attachment)}><Delete/></IconButton></Stack>)}{pendingFiles.map((file,index)=><Stack key={`${file.name}-${index}`} direction="row" alignItems="center"><AttachFile fontSize="small"/><Typography flex={1} ml={1}>{file.name} · {(file.size/1024).toFixed(0)} KB · uploads when saved</Typography><IconButton onClick={()=>setPendingFiles(value=>value.filter((_,i)=>i!==index))}><Delete/></IconButton></Stack>)}{pendingLinks.map((link,index)=><Stack key={`${link.url}-${index}`} direction="row" alignItems="center"><LinkIcon fontSize="small"/><Typography flex={1} ml={1}>{link.label} · saves when task is saved</Typography><IconButton onClick={()=>setPendingLinks(value=>value.filter((_,i)=>i!==index))}><Delete/></IconButton></Stack>)}</Stack></Paper>
-  </Stack></DialogContent><DialogActions><Button disabled={busy} onClick={onClose}>Cancel</Button><Button variant="contained" disabled={busy||!editor.title.trim()} onClick={save}>{busy?<CircularProgress size={20}/>:'Save task'}</Button></DialogActions></Dialog>;
+  return (
+    <Dialog
+      open={open}
+      onClose={busy ? undefined : onClose}
+      fullScreen={mobile}
+      fullWidth
+      maxWidth="md"
+      slotProps={{
+        paper: {
+          sx: mobile ? { height: '100dvh', maxHeight: '100dvh' } : undefined
+        }
+      }}
+    >
+      <DialogTitle>{task ? 'Task details' : 'Create task'}</DialogTitle>
+      <DialogContent sx={mobile ? { pb: 2 } : undefined}>
+        <Stack spacing={2} mt={1}>
+          {error && <Alert severity="error">{error}</Alert>}
+          <TextField label="Title" value={editor.title} onChange={(event) => setEditor((value) => ({ ...value, title: event.target.value }))} />
+          <TextField
+            multiline
+            minRows={3}
+            label="Description"
+            value={editor.description}
+            onChange={(event) =>
+              setEditor((value) => ({
+                ...value,
+                description: event.target.value
+              }))
+            }
+          />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField select fullWidth label="Status" value={editor.status} onChange={(event) => setEditor((value) => ({ ...value, status: event.target.value }))}>
+              {['not_started', 'in_progress', 'waiting', 'completed'].map((value) => (
+                <MenuItem key={value} value={value}>
+                  {value.replaceAll('_', ' ')}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              fullWidth
+              label="Priority"
+              value={editor.priority}
+              onChange={(event) =>
+                setEditor((value) => ({
+                  ...value,
+                  priority: event.target.value
+                }))
+              }
+            >
+              {['critical', 'high', 'medium', 'low', 'none'].map((value) => (
+                <MenuItem key={value} value={value}>
+                  {value}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Stack>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField
+              select
+              fullWidth
+              label="Project"
+              value={editor.projectId}
+              onChange={(event) =>
+                setEditor((value) => ({
+                  ...value,
+                  projectId: event.target.value
+                }))
+              }
+            >
+              <MenuItem value="">No project</MenuItem>
+              {projects.map((project) => (
+                <MenuItem key={project.id} value={project.id}>
+                  {project.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              fullWidth
+              label="Responsible person"
+              value={editor.responsiblePersonId}
+              onChange={(event) =>
+                setEditor((value) => ({
+                  ...value,
+                  responsiblePersonId: event.target.value
+                }))
+              }
+            >
+              <MenuItem value="">Unassigned</MenuItem>
+              {people.map((person) => (
+                <MenuItem key={person.id} value={person.id}>
+                  {person.fullName}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Stack>
+          <TextField label="Due date" type="date" value={editor.dueDate} onChange={(event) => setEditor((value) => ({ ...value, dueDate: event.target.value }))} slotProps={{ inputLabel: { shrink: true } }} />
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="h6">Checklist</Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} my={1}>
+              <TextField
+                fullWidth
+                size="small"
+                label="New checklist item"
+                value={checklistText}
+                onChange={(event) => setChecklistText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addChecklist();
+                  }
+                }}
+              />
+              <Button startIcon={<Add />} onClick={addChecklist}>
+                Add
+              </Button>
+            </Stack>
+            <Stack spacing={0.5}>
+              {checklist.map((item, index) => (
+                <Stack key={item.id || index} direction="row" alignItems="center">
+                  <Checkbox checked={item.completed} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, completed: event.target.checked } : entry)))} />
+                  <Typography
+                    sx={{
+                      textDecoration: item.completed ? 'line-through' : 'none',
+                      flex: 1
+                    }}
+                  >
+                    {item.description}
+                  </Typography>
+                  <FormControlLabel control={<Checkbox size="small" checked={item.required} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, required: event.target.checked } : entry)))} />} label="Required" />
+                  <IconButton
+                    aria-label="Delete checklist item"
+                    onClick={() => {
+                      if (item.id) setDeletedChecklist((value) => [...value, item.id!]);
+                      setChecklist((value) => value.filter((_, i) => i !== index));
+                    }}
+                  >
+                    <Delete />
+                  </IconButton>
+                </Stack>
+              ))}
+            </Stack>
+          </Paper>
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="h6">Dependencies</Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} my={1}>
+              <TextField select fullWidth size="small" label="Prerequisite task" value={prerequisiteId} onChange={(event) => setPrerequisiteId(event.target.value)}>
+                <MenuItem value="">Choose a task</MenuItem>
+                {tasks
+                  .filter((item) => item.id !== task?.id)
+                  .map((item) => (
+                    <MenuItem key={item.id} value={item.id}>
+                      {item.title}
+                    </MenuItem>
+                  ))}
+              </TextField>
+              <Button startIcon={<Add />} onClick={addDependency}>
+                Link
+              </Button>
+            </Stack>
+            <Stack spacing={1}>
+              {dependencies.map((dependency, index) => (
+                <Stack key={dependency.id} direction="row" alignItems="center">
+                  <Box flex={1}>
+                    <Typography fontWeight={700}>{dependency.prerequisiteTitle}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {dependency.prerequisiteStatus.replaceAll('_', ' ') || 'Pending'} · {dependency.mandatory ? 'Required' : 'Optional'}
+                    </Typography>
+                  </Box>
+                  <FormControlLabel control={<Checkbox checked={dependency.mandatory} onChange={(event) => setDependencies((value) => value.map((entry, i) => (i === index ? { ...entry, mandatory: event.target.checked } : entry)))} />} label="Required" />
+                  <IconButton
+                    aria-label="Remove dependency"
+                    onClick={() => {
+                      if (!dependency.id.startsWith('new-')) setDeletedDependencies((value) => [...value, dependency.id]);
+                      setDependencies((value) => value.filter((_, i) => i !== index));
+                    }}
+                  >
+                    <Delete />
+                  </IconButton>
+                </Stack>
+              ))}
+            </Stack>
+          </Paper>
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="h6">Files, images, documents & links</Typography>
+            <Typography variant="body2" color="text.secondary" mb={1.5}>
+              Files are private to this workspace. Maximum 6 MB each. Links must use HTTPS.
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <Button component="label" variant="outlined" startIcon={<AttachFile />}>
+                Add files
+                <input
+                  hidden
+                  multiple
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/csv,application/zip,.docx,.xlsx,.pptx"
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files || []);
+                    setPendingFiles((value) => [...value, ...files]);
+                    event.currentTarget.value = '';
+                  }}
+                />
+              </Button>
+              <TextField size="small" label="Link label" value={linkLabel} onChange={(event) => setLinkLabel(event.target.value)} />
+              <TextField size="small" fullWidth label="https:// link" value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} />
+              <Button startIcon={<LinkIcon />} disabled={!linkUrl.trim()} onClick={addLink}>
+                Add link
+              </Button>
+            </Stack>
+            <Stack mt={1} spacing={0.5}>
+              {attachments.map((attachment) => (
+                <Stack key={attachment.id} direction="row" alignItems="center">
+                  <AttachFile fontSize="small" />
+                  <Typography flex={1} ml={1}>
+                    {attachment.displayName}
+                  </Typography>
+                  <IconButton aria-label="Open attachment" onClick={() => void openAttachment(attachment)}>
+                    <OpenInNew />
+                  </IconButton>
+                  <IconButton aria-label="Delete attachment" onClick={() => void deleteAttachment(attachment)}>
+                    <Delete />
+                  </IconButton>
+                </Stack>
+              ))}
+              {pendingFiles.map((file, index) => (
+                <Stack key={`${file.name}-${index}`} direction="row" alignItems="center">
+                  <AttachFile fontSize="small" />
+                  <Typography flex={1} ml={1}>
+                    {file.name} · {(file.size / 1024).toFixed(0)} KB · uploads when saved
+                  </Typography>
+                  <IconButton onClick={() => setPendingFiles((value) => value.filter((_, i) => i !== index))}>
+                    <Delete />
+                  </IconButton>
+                </Stack>
+              ))}
+              {pendingLinks.map((link, index) => (
+                <Stack key={`${link.url}-${index}`} direction="row" alignItems="center">
+                  <LinkIcon fontSize="small" />
+                  <Typography flex={1} ml={1}>
+                    {link.label} · saves when task is saved
+                  </Typography>
+                  <IconButton onClick={() => setPendingLinks((value) => value.filter((_, i) => i !== index))}>
+                    <Delete />
+                  </IconButton>
+                </Stack>
+              ))}
+            </Stack>
+          </Paper>
+        </Stack>
+      </DialogContent>
+      <DialogActions
+        sx={
+          mobile
+            ? {
+                position: 'sticky',
+                bottom: 0,
+                zIndex: 3,
+                flexShrink: 0,
+                borderTop: 1,
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
+                px: 2,
+                pt: 1.25,
+                pb: 'calc(20px + env(safe-area-inset-bottom))',
+                boxShadow: '0 -8px 20px rgba(0,0,0,.18)',
+                '& .MuiButton-root': { minHeight: 44, minWidth: 110 }
+              }
+            : undefined
+        }
+      >
+        <Button disabled={busy} onClick={onClose}>
+          Cancel
+        </Button>
+        <Button variant="contained" disabled={busy || !editor.title.trim()} onClick={save}>
+          {busy ? <CircularProgress size={20} /> : 'Save task'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
 }
