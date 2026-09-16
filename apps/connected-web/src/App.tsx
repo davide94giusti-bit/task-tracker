@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, AppBar, Avatar, Badge, BottomNavigation, BottomNavigationAction, Box, Button, Card, CardActionArea, CardContent, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, LinearProgress, List, ListItemButton, ListItemIcon, ListItemText, MenuItem, Paper, Snackbar, Stack, Switch, TextField, ThemeProvider, Toolbar, Tooltip, Typography, createTheme, useMediaQuery } from '@mui/material';
+import { Alert, AppBar, Avatar, Badge, BottomNavigation, BottomNavigationAction, Box, Button, Card, CardActionArea, CardContent, Chip, CircularProgress, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, LinearProgress, List, ListItemButton, ListItemIcon, ListItemText, MenuItem, Paper, Snackbar, Stack, Switch, TextField, ThemeProvider, Toolbar, Tooltip, Typography, createTheme, useMediaQuery } from '@mui/material';
 import { Add, CalendarMonth, CheckCircle, CloudDone, Dashboard as DashboardIcon, DarkMode, Delete, Event, ExpandLess, ExpandMore, Folder, Groups, Inbox, InfoOutlined, LightMode, Logout, Menu, MoreHoriz, Notifications, People, Refresh, Settings, TaskAlt, Today } from '@mui/icons-material';
 import { api, flushQueue } from './api';
 import { consumeAuthLink, resetPassword, session, signIn } from './auth';
@@ -88,7 +88,7 @@ return <>
 <Box sx={{ width: 5, height: 48, borderRadius: 2, bgcolor: t.priority === 'critical' ? 'error.main' : t.priority === 'high' ? 'warning.main' : 'primary.main' }}/>
 <Box flex={1} minWidth={0}>
 <Typography fontWeight={750} noWrap>{t.title}</Typography>
-<Typography variant="body2" color="text.secondary" noWrap>{[t.projectName, t.responsiblePersonName, t.dueDate && `Due ${t.dueDate}`].filter(Boolean).join(' â€¢ ') || 'No project or due date'}</Typography>
+<Typography variant="body2" color="text.secondary" noWrap>{[t.projectName, t.responsiblePersonName, t.dueDate && `Due ${t.dueDate}`].filter(Boolean).join(' • ') || 'No project or due date'}</Typography>
 </Box>{t.blocked && <Chip label="Blocked" color="warning"/>}<Chip label={t.status.replaceAll('_', ' ')}/>
 </Stack>
 </CardContent>
@@ -159,7 +159,7 @@ return <>
 <Box className="card-grid">{items.map(p => <Card key={p.id}>
 <CardContent>
 <Typography variant="h6">{p.fullName}</Typography>
-<Typography color="text.secondary">{p.role || 'No function'} â€¢ {p.activeTasks} active</Typography>
+<Typography color="text.secondary">{p.role || 'No function'} • {p.activeTasks} active</Typography>
 <LinearProgress variant="determinate" value={p.progress} sx={{ mt: 2, height: 8, borderRadius: 4 }}/>
 <Typography variant="caption">{p.progress}% of task load complete</Typography>
 </CardContent>
@@ -181,9 +181,9 @@ return <>
 <Stack direction="row" justifyContent="space-between" mb={2}>
 <Button onClick={() => setCursor(new Date())}>Today</Button>
 <Stack direction="row">
-<Button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>â€¹</Button>
+<Button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>‹</Button>
 <Typography fontWeight={700} sx={{ p: 1 }}>{cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</Typography>
-<Button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>â€º</Button>
+<Button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>›</Button>
 </Stack>
 </Stack>
 <Stack direction="row" gap={2} flexWrap="wrap" mb={2}>{[['red', 'Overdue or critical'], ['orange', 'High priority'], ['blue', 'Scheduled'], ['green', 'Completed only']].map(([c, l]) => <Typography variant="caption" key={c}>
@@ -206,7 +206,7 @@ return <>
 <CardActionArea onClick={() => { setSelected(null); onOpen(t); }}>
 <CardContent>
 <Typography fontWeight={700}>{t.title}</Typography>
-<Typography variant="body2" color="text.secondary">{t.projectName || 'No project'} â€¢ {t.dueTime || 'All day'}</Typography>
+<Typography variant="body2" color="text.secondary">{t.projectName || 'No project'} • {t.dueTime || 'All day'}</Typography>
 </CardContent>
 </CardActionArea>
 </Card>)}{!day?.tasks.length && <Typography color="text.secondary">No tasks on this day.</Typography>}</Stack>
@@ -304,7 +304,7 @@ return <ThemeProvider theme={theme}><CssBaseline/>
 <ListItemIcon>{n.icon}</ListItemIcon>
 <ListItemText primary={n.label}/>
 </ListItemButton>)}</Box>)}</List>
-</Drawer>}<Box component="main" sx={{ pt: { xs: '82px', md: '96px' }, pl: { xs: 2, md: '292px' }, pr: { xs: 2, md: 4 }, pb: 4, maxWidth: 1800 }}>{filter && <Button onClick={() => setFilter(null)}>â† Back to dashboard</Button>}{body}</Box>{mobile && <Paper elevation={8} className="bottom-nav">
+</Drawer>}<Box component="main" sx={{ pt: { xs: '82px', md: '96px' }, pl: { xs: 2, md: '292px' }, pr: { xs: 2, md: 4 }, pb: 4, maxWidth: 1800 }}>{filter && <Button onClick={() => setFilter(null)}>← Back to dashboard</Button>}{body}</Box>{mobile && <Paper elevation={8} className="bottom-nav">
 <BottomNavigation value={view} onChange={(_, v) => v === 'more' ? setDrawer(true) : navigate(v)} showLabels>
 <BottomNavigationAction value="dashboard" label="Dashboard" icon={<DashboardIcon />}/>
 <BottomNavigationAction value="today" label="Today" icon={<Today />}/>
