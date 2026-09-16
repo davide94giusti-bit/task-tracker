@@ -31,3 +31,4 @@ binding = "DIAGNOSTICS"
 service = "task-tracker-logging-diagnostics"
 [vars]
 ENVIRONMENT = "production"
+ALLOWED_ORIGINS = "https://task-tracker-63a.pages.dev"

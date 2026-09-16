@@ -8,3 +8,4 @@ service = "task-tracker-data"
 [vars]
 ENVIRONMENT = "production"
 EMAIL_DAILY_CEILING = "75"
+APP_URL = "https://task-tracker-63a.pages.dev"

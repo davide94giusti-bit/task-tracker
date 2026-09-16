@@ -7,6 +7,5 @@ binding = "DATA"
 service = "task-tracker-data"
 [vars]
 ENVIRONMENT = "production"
-APP_URL = "https://task-tracker-connected.pages.dev"
+APP_URL = "https://task-tracker-63a.pages.dev"
 CONNECTED_USER_LIMIT = "20"
-BOOTSTRAP_OWNER_EMAILS = ""
