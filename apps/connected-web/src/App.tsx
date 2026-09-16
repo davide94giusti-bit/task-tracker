@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, AppBar, Avatar, Badge, BottomNavigation, BottomNavigationAction, Box, Button, Card, CardActionArea, CardContent, Chip, CircularProgress, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, LinearProgress, List, ListItemButton, ListItemIcon, ListItemText, MenuItem, Paper, Snackbar, Stack, Switch, TextField, ThemeProvider, Toolbar, Tooltip, Typography, createTheme, useMediaQuery } from '@mui/material';
+import { Alert, AppBar, Avatar, BottomNavigation, BottomNavigationAction, Box, Button, Card, CardActionArea, CardContent, Chip, CircularProgress, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, LinearProgress, List, ListItemButton, ListItemIcon, ListItemText, MenuItem, Paper, Snackbar, Stack, Switch, TextField, ThemeProvider, Toolbar, Tooltip, Typography, createTheme, useMediaQuery } from '@mui/material';
 import { Add, CalendarMonth, CheckCircle, CloudDone, Dashboard as DashboardIcon, DarkMode, Delete, Event, ExpandLess, ExpandMore, Folder, Groups, Inbox, InfoOutlined, LightMode, Logout, Menu, MoreHoriz, Notifications, People, Refresh, Settings, TaskAlt, Today } from '@mui/icons-material';
 import { api, flushQueue } from './api';
 import { consumeAuthLink, resetPassword, session, signIn } from './auth';
@@ -136,9 +136,10 @@ return <>
 </CardActionArea>
 </Card>
 </>}</>; }
-function ProjectsView() { const [items, setItems] = useState<Project[]>([]); useEffect(() => { api<Project[]>('/projects').then(setItems); }, []);
+function ProjectsView() { const [items, setItems] = useState<Project[]>([]), [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [form, setForm] = useState({ name: '', description: '', color: '#2563eb' }); const load = useCallback(() => { setError(''); return api<Project[]>('/projects').then(setItems).catch(e => setError(e.message)); }, []); useEffect(() => { void load(); }, [load]);
 return <>
-<PageTitle title="Projects" subtitle="Group responsibilities and measure aggregate progress." action={<Button variant="contained" startIcon={<Add />}>New project</Button>}/>
+<PageTitle title="Projects" subtitle="Group responsibilities and measure aggregate progress." action={<Button variant="contained" startIcon={<Add />} onClick={() => setOpen(true)}>New project</Button>}/>
+{error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 <Box className="card-grid">{items.map(p => <Card key={p.id}>
 <CardContent>
 <Stack direction="row" spacing={2}>
@@ -152,10 +153,12 @@ return <>
 </Stack>
 </CardContent>
 </Card>)}</Box>
+<Dialog open={open} onClose={() => !busy && setOpen(false)} fullWidth maxWidth="sm"><DialogTitle>Create project</DialogTitle><DialogContent><Stack spacing={2} mt={1}><TextField autoFocus label="Project name" value={form.name} onChange={e => setForm(v => ({ ...v, name: e.target.value }))}/><TextField multiline minRows={3} label="Description" value={form.description} onChange={e => setForm(v => ({ ...v, description: e.target.value }))}/><TextField label="Colour" type="color" value={form.color} onChange={e => setForm(v => ({ ...v, color: e.target.value }))} slotProps={{ inputLabel: { shrink: true } }}/></Stack></DialogContent><DialogActions><Button disabled={busy} onClick={() => setOpen(false)}>Cancel</Button><Button variant="contained" disabled={busy || !form.name.trim()} onClick={async () => { setBusy(true); setError(''); try { await api('/projects/save', { method: 'POST', body: { ...form, name: form.name.trim() } }); setForm({ name: '', description: '', color: '#2563eb' }); setOpen(false); await load(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>{busy ? <CircularProgress size={20}/> : 'Create project'}</Button></DialogActions></Dialog>
 </>; }
-function PeopleView() { const [items, setItems] = useState<Person[]>([]), [role, setRole] = useState(''); useEffect(() => { api<Person[]>('/people' + (role ? `?role=${encodeURIComponent(role)}` : '')).then(setItems); }, [role]);
+function PeopleView() { const [items, setItems] = useState<Person[]>([]), [role, setRole] = useState(''), [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [form, setForm] = useState({ fullName: '', email: '', company: '', role: '', phone: '', notes: '' }); const load = useCallback(() => { setError(''); return api<Person[]>('/people' + (role ? `?role=${encodeURIComponent(role)}` : '')).then(setItems).catch(e => setError(e.message)); }, [role]); useEffect(() => { void load(); }, [load]);
 return <>
-<PageTitle title="People" subtitle="Responsibilities, functions, and task-load progress."/>
+<PageTitle title="People" subtitle="Contacts and responsibilities. People do not receive login access." action={<Button variant="contained" startIcon={<Add />} onClick={() => setOpen(true)}>Add person</Button>}/>
+{error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 <TextField size="small" label="Filter by function" value={role} onChange={e => setRole(e.target.value)} sx={{ mb: 2 }}/>
 <Box className="card-grid">{items.map(p => <Card key={p.id}>
 <CardContent>
@@ -165,6 +168,7 @@ return <>
 <Typography variant="caption">{p.progress}% of task load complete</Typography>
 </CardContent>
 </Card>)}</Box>
+<Dialog open={open} onClose={() => !busy && setOpen(false)} fullWidth maxWidth="sm"><DialogTitle>Add person or contact</DialogTitle><DialogContent><Stack spacing={2} mt={1}><TextField autoFocus label="Full name" value={form.fullName} onChange={e => setForm(v => ({ ...v, fullName: e.target.value }))}/><TextField label="Email (optional)" type="email" value={form.email} onChange={e => setForm(v => ({ ...v, email: e.target.value }))}/><TextField label="Company" value={form.company} onChange={e => setForm(v => ({ ...v, company: e.target.value }))}/><TextField label="Function / role" value={form.role} onChange={e => setForm(v => ({ ...v, role: e.target.value }))}/><TextField label="Phone" value={form.phone} onChange={e => setForm(v => ({ ...v, phone: e.target.value }))}/><TextField multiline minRows={3} label="Notes" value={form.notes} onChange={e => setForm(v => ({ ...v, notes: e.target.value }))}/></Stack></DialogContent><DialogActions><Button disabled={busy} onClick={() => setOpen(false)}>Cancel</Button><Button variant="contained" disabled={busy || !form.fullName.trim()} onClick={async () => { setBusy(true); setError(''); try { await api('/people/save', { method: 'POST', body: { ...form, fullName: form.fullName.trim() } }); setForm({ fullName: '', email: '', company: '', role: '', phone: '', notes: '' }); setOpen(false); await load(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>{busy ? <CircularProgress size={20}/> : 'Add person'}</Button></DialogActions></Dialog>
 </>; }
 function CalendarView({ onOpen, onNew }: {
     onOpen: (t: Task) => void;
@@ -193,9 +197,7 @@ return <>
 <CardActionArea onClick={() => setSelected(d.date)}>
 <CardContent>
 <Typography fontWeight={700}>{Number(d.date.slice(-2))}</Typography>
-<Badge badgeContent={d.count} color="primary">
-<Box />
-</Badge>
+{d.count > 0 && <Box className="calendar-count" aria-label={`${d.count} tasks`}>{d.count}</Box>}
 <Typography variant="caption">{d.count ? `${d.count} task${d.count === 1 ? '' : 's'}` : 'No tasks'}</Typography>
 </CardContent>
 </CardActionArea>
@@ -260,7 +262,7 @@ function Generic({ view }: {
 <Typography color="text.secondary">This view is ready to load its validated data from the matching connected service.</Typography>
 </Paper>
 </>; }
-export default function App() { const [logged, setLogged] = useState(!!session.get()), [authMode,setAuthMode]=useState<'invite'|'recovery'|null>(null), [view, setView] = useState<View>((new URLSearchParams(location.search).get('view') as View) || 'dashboard'), [dark, setDark] = useState(matchMedia('(prefers-color-scheme: dark)').matches), [drawer, setDrawer] = useState(false), [offline, setOffline] = useState(!navigator.onLine), [task, setTask] = useState<Task | null>(null), [newDate, setNewDate] = useState<string | null>(null), [filter, setFilter] = useState<{
+export default function App() { const [logged, setLogged] = useState(!!session.get()), [authMode,setAuthMode]=useState<'invite'|'recovery'|null>(null), [view, setView] = useState<View>((new URLSearchParams(location.search).get('view') as View) || 'dashboard'), [dark, setDark] = useState(matchMedia('(prefers-color-scheme: dark)').matches), [drawer, setDrawer] = useState(false), [desktopNav, setDesktopNav] = useState(true), [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({}), [offline, setOffline] = useState(!navigator.onLine), [task, setTask] = useState<Task | null>(null), [newDate, setNewDate] = useState<string | null>(null), [filter, setFilter] = useState<{
     title: string;
     q: Record<string, unknown>;
 } | null>(null);
@@ -280,11 +282,12 @@ const theme = useMemo(() => createTheme({ palette: { mode: dark ? 'dark' : 'ligh
 <Login />
 </ThemeProvider>;
 const body = filter ? <TasksView view="tasks" query={filter.q} onOpen={setTask} onNew={() => setNewDate('')}/> : view === 'dashboard' ? <DashboardView openFilter={(title, q) => setFilter({ title, q })}/> : ['tasks', 'today', 'upcoming', 'completed', 'trash'].includes(view) ? <TasksView view={view} onOpen={setTask} onNew={() => setNewDate('')}/> : view === 'projects' ? <ProjectsView /> : view === 'people' ? <PeopleView /> : view === 'calendar' ? <CalendarView onOpen={setTask} onNew={setNewDate}/> : view === 'settings' ? <SettingsView /> : view==='access'?<UsersAccessView/>:view==='security'?<AccountSecurity/>:view==='backup'?<BackupImportView/>:view==='diagnostics'?<DiagnosticsView/>:<Generic view={view}/>;
-const navigate = (v: View) => { setFilter(null); setView(v); setDrawer(false); history.replaceState(null, '', `?view=${v}`); };
+const releaseFocus = () => (document.activeElement as HTMLElement | null)?.blur();
+const navigate = (v: View) => { releaseFocus(); setFilter(null); setView(v); setDrawer(false); history.replaceState(null, '', `?view=${v}`); };
 return <ThemeProvider theme={theme}><CssBaseline/>
 <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary', pb: mobile ? 'calc(76px + env(safe-area-inset-bottom))' : 0 }}>
 <AppBar color="inherit" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-<Toolbar sx={{ paddingTop: 'env(safe-area-inset-top)' }}>{!mobile && <IconButton onClick={() => setDrawer(!drawer)}>
+<Toolbar sx={{ paddingTop: 'env(safe-area-inset-top)' }}>{!mobile && <IconButton aria-label={desktopNav ? 'Collapse navigation' : 'Expand navigation'} onClick={() => setDesktopNav(value => !value)}>
 <Menu />
 </IconButton>}<Avatar sx={{ width: 34, height: 34, bgcolor: 'primary.main', fontWeight: 800 }}>T</Avatar>
 <Typography fontWeight={800} color="primary" ml={1}>Task Tracker</Typography>
@@ -296,24 +299,24 @@ return <ThemeProvider theme={theme}><CssBaseline/>
 </IconButton>
 </Tooltip>
 </Toolbar>
-</AppBar>{!mobile && <Drawer variant="permanent" open sx={{ width: 260, '& .MuiDrawer-paper': { width: 260, mt: '64px', height: 'calc(100% - 64px)' } }}>
+</AppBar>{!mobile && desktopNav && <Drawer variant="permanent" open sx={{ width: 260, '& .MuiDrawer-paper': { width: 260, mt: '64px', height: 'calc(100% - 64px)' } }}>
 <List>{['Overview', 'Tasks', 'Organization', 'System'].map(group => <Box key={group}>
-<ListItemButton>
+<ListItemButton aria-expanded={!collapsedGroups[group]} onClick={() => setCollapsedGroups(value => ({ ...value, [group]: !value[group] }))}>
 <ListItemText primary={group} primaryTypographyProps={{ variant: 'overline', fontWeight: 800 }}/>
-<ExpandLess />
-</ListItemButton>{nav.filter(n => n.group === group).map(n => <ListItemButton key={n.view} selected={view === n.view && !filter} onClick={() => navigate(n.view)}>
+{collapsedGroups[group] ? <ExpandMore /> : <ExpandLess />}
+</ListItemButton>{!collapsedGroups[group] && nav.filter(n => n.group === group).map(n => <ListItemButton key={n.view} selected={view === n.view && !filter} onClick={() => navigate(n.view)}>
 <ListItemIcon>{n.icon}</ListItemIcon>
 <ListItemText primary={n.label}/>
 </ListItemButton>)}</Box>)}</List>
-</Drawer>}<Box component="main" sx={{ pt: { xs: '82px', md: '96px' }, pl: { xs: 2, md: '292px' }, pr: { xs: 2, md: 4 }, pb: 4, maxWidth: 1800 }}>{filter && <Button onClick={() => setFilter(null)}>← Back to dashboard</Button>}{body}</Box>{mobile && <Paper elevation={8} className="bottom-nav">
-<BottomNavigation value={view} onChange={(_, v) => v === 'more' ? setDrawer(true) : navigate(v)} showLabels>
+</Drawer>}<Box component="main" sx={{ pt: { xs: '82px', md: '96px' }, pl: { xs: 2, md: desktopNav ? '292px' : 4 }, pr: { xs: 2, md: 4 }, pb: 4, maxWidth: 1800 }}>{filter && <Button onClick={() => setFilter(null)}>← Back to dashboard</Button>}{body}</Box>{mobile && <Paper elevation={8} className="bottom-nav">
+<BottomNavigation value={view} onChange={(_, v) => { if (v === 'more') { releaseFocus(); setDrawer(true); } else navigate(v); }} showLabels>
 <BottomNavigationAction value="dashboard" label="Dashboard" icon={<DashboardIcon />}/>
 <BottomNavigationAction value="today" label="Today" icon={<Today />}/>
 <BottomNavigationAction value="tasks" label="Tasks" icon={<Inbox />}/>
 <BottomNavigationAction value="calendar" label="Calendar" icon={<CalendarMonth />}/>
 <BottomNavigationAction value="more" label="More" icon={<MoreHoriz />}/>
 </BottomNavigation>
-</Paper>}<Drawer anchor="right" open={mobile && drawer} onClose={() => setDrawer(false)}>
+</Paper>}<Drawer anchor="right" open={mobile && drawer} onClose={() => { releaseFocus(); setDrawer(false); }}>
 <Box sx={{ width: 'min(88vw,360px)', pt: 'env(safe-area-inset-top)' }}>
 <List>{nav.filter(n => !['dashboard', 'today', 'tasks', 'calendar'].includes(n.view)).map(n => <ListItemButton key={n.view} onClick={() => navigate(n.view)}>
 <ListItemIcon>{n.icon}</ListItemIcon>

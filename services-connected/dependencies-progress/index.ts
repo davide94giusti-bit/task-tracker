@@ -1,3 +1,96 @@
-import{CreatePrerequisite,DependencyWrite}from'../../packages/connected-contracts';import{authContext,body,call,health,internal,json,withRequest}from'../_shared/runtime';import type{BaseEnv,Fetcher,WorkerHandler}from'../_shared/types';
-interface Env extends BaseEnv{DATA:Fetcher}
-export default <WorkerHandler<Env>>{async fetch(request,env){return withRequest('connected-dependencies-progress',request,env,async requestId=>{internal(request,env);const url=new URL(request.url),context=authContext(request);if(url.pathname==='/health')return json(health('connected-dependencies-progress',['data']),200,requestId);if(url.pathname==='/people-load')return json(await call(env.DATA,'/rpc',env,context,{method:'POST',body:JSON.stringify({name:'connected_dependency_load',args:{}})}),200,requestId);if(url.pathname==='/link'){const input=DependencyWrite.parse(await body(request));return json(await call(env.DATA,'/rpc',env,context,{method:'POST',body:JSON.stringify({name:'link_dependency_atomic',args:{p_waiting_task_id:input.waitingTaskId,p_prerequisite_task_id:input.prerequisiteTaskId,p_mandatory:input.mandatory}})}),200,requestId)}if(url.pathname==='/create-prerequisite'){const input=CreatePrerequisite.parse(await body(request));return json(await call(env.DATA,'/rpc',env,context,{method:'POST',body:JSON.stringify({name:'create_prerequisite_atomic',args:{p_waiting_task_id:input.waitingTaskId,p_task:input.task,p_mandatory:input.mandatory}})}),200,requestId)}return json({code:'NOT_FOUND',message:'Dependency route not found',service:'connected-dependencies-progress',requestId,retryable:false},404,requestId)})}};
+import {
+  CreatePrerequisite,
+  DependencyWrite,
+} from "../../packages/connected-contracts";
+import {
+  authContext,
+  body,
+  call,
+  health,
+  internal,
+  json,
+  withRequest,
+} from "../_shared/runtime";
+import type { BaseEnv, Fetcher, WorkerHandler } from "../_shared/types";
+interface Env extends BaseEnv {
+  DATA: Fetcher;
+}
+export default <WorkerHandler<Env>>{
+  async fetch(request, env) {
+    return withRequest(
+      "connected-dependencies-progress",
+      request,
+      env,
+      async (requestId) => {
+        internal(request, env);
+        const url = new URL(request.url);
+        if (url.pathname === "/health")
+          return json(
+            health("connected-dependencies-progress", ["data"]),
+            200,
+            requestId,
+          );
+        const context = authContext(request);
+        if (url.pathname === "/people-load")
+          return json(
+            await call(env.DATA, "/rpc", env, context, {
+              method: "POST",
+              body: JSON.stringify({
+                name: "connected_dependency_load",
+                args: {},
+              }),
+            }),
+            200,
+            requestId,
+          );
+        if (url.pathname === "/link") {
+          const input = DependencyWrite.parse(await body(request));
+          return json(
+            await call(env.DATA, "/rpc", env, context, {
+              method: "POST",
+              body: JSON.stringify({
+                name: "link_dependency_atomic",
+                args: {
+                  p_waiting_task_id: input.waitingTaskId,
+                  p_prerequisite_task_id: input.prerequisiteTaskId,
+                  p_mandatory: input.mandatory,
+                },
+              }),
+            }),
+            200,
+            requestId,
+          );
+        }
+        if (url.pathname === "/create-prerequisite") {
+          const input = CreatePrerequisite.parse(await body(request));
+          return json(
+            await call(env.DATA, "/rpc", env, context, {
+              method: "POST",
+              body: JSON.stringify({
+                name: "create_prerequisite_atomic",
+                args: {
+                  p_waiting_task_id: input.waitingTaskId,
+                  p_task: input.task,
+                  p_mandatory: input.mandatory,
+                },
+              }),
+            }),
+            200,
+            requestId,
+          );
+        }
+        return json(
+          {
+            code: "NOT_FOUND",
+            message: "Dependency route not found",
+            service: "connected-dependencies-progress",
+            requestId,
+            retryable: false,
+          },
+          404,
+          requestId,
+        );
+      },
+    );
+  },
+};
