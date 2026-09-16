@@ -4,6 +4,7 @@ import { Add, CalendarMonth, CheckCircle, CloudDone, Dashboard as DashboardIcon,
 import { api, flushQueue } from './api';
 import { consumeAuthLink, resetPassword, session, signIn } from './auth';
 import { AccountSecurity, PasswordSetup, UsersAccessView } from './AccessViews';
+import { BackupImportView, DiagnosticsView } from './BackupDiagnosticsViews';
 import type { Dashboard, Person, Project, Task, View } from './types';
 // React 19 no longer exports JSX globally; this local bridge types stored icon elements.
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -278,7 +279,7 @@ const theme = useMemo(() => createTheme({ palette: { mode: dark ? 'dark' : 'ligh
     return <ThemeProvider theme={theme}><CssBaseline/>
 <Login />
 </ThemeProvider>;
-const body = filter ? <TasksView view="tasks" query={filter.q} onOpen={setTask} onNew={() => setNewDate('')}/> : view === 'dashboard' ? <DashboardView openFilter={(title, q) => setFilter({ title, q })}/> : ['tasks', 'today', 'upcoming', 'completed', 'trash'].includes(view) ? <TasksView view={view} onOpen={setTask} onNew={() => setNewDate('')}/> : view === 'projects' ? <ProjectsView /> : view === 'people' ? <PeopleView /> : view === 'calendar' ? <CalendarView onOpen={setTask} onNew={setNewDate}/> : view === 'settings' ? <SettingsView /> : view==='access'?<UsersAccessView/>:view==='security'?<AccountSecurity/>:<Generic view={view}/>;
+const body = filter ? <TasksView view="tasks" query={filter.q} onOpen={setTask} onNew={() => setNewDate('')}/> : view === 'dashboard' ? <DashboardView openFilter={(title, q) => setFilter({ title, q })}/> : ['tasks', 'today', 'upcoming', 'completed', 'trash'].includes(view) ? <TasksView view={view} onOpen={setTask} onNew={() => setNewDate('')}/> : view === 'projects' ? <ProjectsView /> : view === 'people' ? <PeopleView /> : view === 'calendar' ? <CalendarView onOpen={setTask} onNew={setNewDate}/> : view === 'settings' ? <SettingsView /> : view==='access'?<UsersAccessView/>:view==='security'?<AccountSecurity/>:view==='backup'?<BackupImportView/>:view==='diagnostics'?<DiagnosticsView/>:<Generic view={view}/>;
 const navigate = (v: View) => { setFilter(null); setView(v); setDrawer(false); history.replaceState(null, '', `?view=${v}`); };
 return <ThemeProvider theme={theme}><CssBaseline/>
 <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary', pb: mobile ? 'calc(76px + env(safe-area-inset-bottom))' : 0 }}>

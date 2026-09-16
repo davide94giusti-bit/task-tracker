@@ -5,5 +5,26 @@ workers_dev = false
 [[services]]
 binding = "DATA"
 service = "task-tracker-data"
+[[services]]
+binding = "IDENTITY"
+service = "task-tracker-identity-access"
+[[services]]
+binding = "TASKS"
+service = "task-tracker-tasks"
+[[services]]
+binding = "PEOPLE"
+service = "task-tracker-people"
+[[services]]
+binding = "DEPENDENCIES"
+service = "task-tracker-dependencies-progress"
+[[services]]
+binding = "REMINDERS"
+service = "task-tracker-reminders"
+[[services]]
+binding = "NOTIFICATIONS"
+service = "task-tracker-notifications"
+[[services]]
+binding = "BACKUP"
+service = "task-tracker-backup-export"
 [vars]
 ENVIRONMENT = "production"
