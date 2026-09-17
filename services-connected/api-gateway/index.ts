@@ -44,6 +44,7 @@ const routes: Array<[string, RegExp, keyof Env, string]> = [
   ["GET", /^\/v1\/projects$/, "TASKS", "/projects"],
   ["POST", /^\/v1\/projects\/save$/, "TASKS", "/project-save"],
   ["GET", /^\/v1\/people$/, "PEOPLE", "/list"],
+  ["GET", /^\/v1\/people\/details$/, "PEOPLE", "/details"],
   ["POST", /^\/v1\/people\/save$/, "PEOPLE", "/save"],
   ["GET", /^\/v1\/dependencies\/people-load$/, "DEPENDENCIES", "/people-load"],
   ["POST", /^\/v1\/dependencies\/link$/, "DEPENDENCIES", "/link"],

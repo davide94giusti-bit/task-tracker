@@ -1,4 +1,5 @@
 import { PersonInput } from "../../packages/contracts";
+import { Uuid } from "../../packages/connected-contracts";
 import {
   authContext,
   body,
@@ -33,6 +34,20 @@ export default <WorkerHandler<Env>>{
           200,
           requestId,
         );
+      }
+      if (url.pathname === "/details") {
+        const personId = Uuid.parse(url.searchParams.get("personId"));
+        const rows = (await call(env.DATA, "/select", env, context, {
+          method: "POST",
+          body: JSON.stringify({
+            table: "people",
+            filters: { id: personId, deleted_at: null },
+            limit: 1,
+          }),
+        })) as any[];
+        if (!rows.length)
+          throw Object.assign(new Error("Contact not found"), { status: 404 });
+        return json(rows[0], 200, requestId);
       }
       if (url.pathname === "/save") {
         const person = PersonInput.parse(await body(request)),

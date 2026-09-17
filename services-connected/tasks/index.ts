@@ -60,7 +60,15 @@ export default <WorkerHandler<Env>>{
       }
       if (url.pathname === "/details") {
         const taskId = Uuid.parse(url.searchParams.get("taskId"));
-        const [checklist, dependencies] = await Promise.all([
+        const [taskRows, checklist, dependencies] = await Promise.all([
+          call(env.DATA, "/select", env, context, {
+            method: "POST",
+            body: JSON.stringify({
+              table: "tasks",
+              filters: { id: taskId },
+              limit: 1,
+            }),
+          }),
           call(env.DATA, "/select", env, context, {
             method: "POST",
             body: JSON.stringify({
@@ -78,7 +86,41 @@ export default <WorkerHandler<Env>>{
             }),
           }),
         ]);
-        return json({ checklist, dependencies }, 200, requestId);
+        const task = (taskRows as any[])[0];
+        if (!task)
+          throw Object.assign(new Error("Task not found"), { status: 404 });
+        const prerequisiteRows = await Promise.all(
+          (dependencies as any[]).map((dependency) =>
+            call(env.DATA, "/select", env, context, {
+              method: "POST",
+              body: JSON.stringify({
+                table: "tasks",
+                filters: {
+                  id: dependency.prerequisiteTaskId,
+                  deleted_at: null,
+                },
+                limit: 1,
+              }),
+            }),
+          ),
+        );
+        const enrichedDependencies = (dependencies as any[]).map(
+          (dependency, index) => {
+            const prerequisiteTask = (prerequisiteRows[index] as any[])[0];
+            return {
+              ...dependency,
+              prerequisiteTitle:
+                prerequisiteTask?.title || "Unavailable prerequisite task",
+              prerequisiteStatus: prerequisiteTask?.status || "unavailable",
+              prerequisiteTask,
+            };
+          },
+        );
+        return json(
+          { task, checklist, dependencies: enrichedDependencies },
+          200,
+          requestId,
+        );
       }
       if (url.pathname === "/checklist-save") {
         const input = ChecklistWrite.parse(await body(request));

@@ -5,7 +5,7 @@ import { api, flushQueue } from './api';
 import { consumeAuthLink, resetPassword, session, signIn } from './auth';
 import { AccountSecurity, PasswordSetup, UsersAccessView } from './AccessViews';
 import { BackupImportView, DiagnosticsView } from './BackupDiagnosticsViews';
-import { EnhancedDashboardView, EnhancedTasksView, NotificationBell, TaskEditorDialog } from './ConnectedEnhancements';
+import { EnhancedDashboardView, EnhancedTasksView, NotificationBell, TaskDetailsDialog, TaskEditorDialog } from './ConnectedEnhancements';
 import type { Dashboard, Person, Project, Task, View } from './types';
 // React 19 no longer exports JSX globally; this local bridge types stored icon elements.
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -271,7 +271,7 @@ function Generic({ view }: {
 <Typography color="text.secondary">This view is ready to load its validated data from the matching connected service.</Typography>
 </Paper>
 </>; }
-export default function App() { const [logged, setLogged] = useState(!!session.get()), [platformAdmin, setPlatformAdmin] = useState(false), [authMode,setAuthMode]=useState<'invite'|'recovery'|null>(null), [view, setView] = useState<View>((new URLSearchParams(location.search).get('view') as View) || 'dashboard'), [dark, setDark] = useState(matchMedia('(prefers-color-scheme: dark)').matches), [drawer, setDrawer] = useState(false), [desktopNav, setDesktopNav] = useState(true), [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({}), [offline, setOffline] = useState(!navigator.onLine), [task, setTask] = useState<Task | null>(null), [newDate, setNewDate] = useState<string | null>(null), [filter, setFilter] = useState<{
+export default function App() { const [logged, setLogged] = useState(!!session.get()), [platformAdmin, setPlatformAdmin] = useState(false), [authMode,setAuthMode]=useState<'invite'|'recovery'|null>(null), [view, setView] = useState<View>((new URLSearchParams(location.search).get('view') as View) || 'dashboard'), [dark, setDark] = useState(matchMedia('(prefers-color-scheme: dark)').matches), [drawer, setDrawer] = useState(false), [desktopNav, setDesktopNav] = useState(true), [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({}), [offline, setOffline] = useState(!navigator.onLine), [task, setTask] = useState<Task | null>(null), [editingTask, setEditingTask] = useState<Task | null>(null), [newDate, setNewDate] = useState<string | null>(null), [refreshToken, setRefreshToken] = useState(0), [filter, setFilter] = useState<{
     title: string;
     q: Record<string, unknown>;
 } | null>(null);
@@ -282,8 +282,10 @@ const theme = useMemo(() => createTheme({ palette: { mode: dark ? 'dark' : 'ligh
     return <ThemeProvider theme={theme}><CssBaseline/>
 <Login />
 </ThemeProvider>;
-const body = filter ? <EnhancedTasksView view="tasks" query={filter.q} title={filter.title} onOpen={setTask} onNew={() => setNewDate('')}/> : view === 'dashboard' ? <EnhancedDashboardView openFilter={(title, q) => setFilter({ title, q })}/> : ['tasks', 'today', 'upcoming', 'completed', 'trash'].includes(view) ? <EnhancedTasksView view={view} onOpen={setTask} onNew={() => setNewDate('')}/> : view === 'projects' ? <ProjectsView onOpen={project => setFilter({ title: project.name, q: { projectId: project.id } })}/> : view === 'people' ? <PeopleView onOpen={person => setFilter({ title: person.fullName, q: { responsiblePersonId: person.id } })}/> : view === 'calendar' ? <CalendarView onOpen={setTask} onNew={setNewDate}/> : view === 'settings' ? <SettingsView /> : view==='access'?(platformAdmin?<UsersAccessView/>:<Alert severity="info">Only the platform administrator can invite and manage application users.</Alert>):view==='security'?<AccountSecurity/>:view==='backup'?<BackupImportView/>:view==='diagnostics'?<DiagnosticsView/>:<Generic view={view}/>;
 const releaseFocus = () => (document.activeElement as HTMLElement | null)?.blur();
+const openTask = (nextTask: Task) => { releaseFocus(); setTask(nextTask); };
+const openNewTask = (date = '') => { releaseFocus(); setNewDate(date); };
+const body = filter ? <EnhancedTasksView view="tasks" query={filter.q} title={filter.title} onOpen={openTask} onNew={() => openNewTask()} refreshToken={refreshToken}/> : view === 'dashboard' ? <EnhancedDashboardView openFilter={(title, q) => setFilter({ title, q })}/> : ['tasks', 'today', 'upcoming', 'completed', 'trash'].includes(view) ? <EnhancedTasksView view={view} onOpen={openTask} onNew={() => openNewTask()} refreshToken={refreshToken}/> : view === 'projects' ? <ProjectsView onOpen={project => setFilter({ title: project.name, q: { projectId: project.id } })}/> : view === 'people' ? <PeopleView onOpen={person => setFilter({ title: person.fullName, q: { responsiblePersonId: person.id } })}/> : view === 'calendar' ? <CalendarView onOpen={openTask} onNew={openNewTask}/> : view === 'settings' ? <SettingsView /> : view==='access'?(platformAdmin?<UsersAccessView/>:<Alert severity="info">Only the platform administrator can invite and manage application users.</Alert>):view==='security'?<AccountSecurity/>:view==='backup'?<BackupImportView/>:view==='diagnostics'?<DiagnosticsView/>:<Generic view={view}/>;
 const navigate = (v: View) => { releaseFocus(); setFilter(null); setView(v); setDrawer(false); history.replaceState(null, '', `?view=${v}`); };
 return <ThemeProvider theme={theme}><CssBaseline/>
 <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary', pb: mobile ? 'calc(76px + env(safe-area-inset-bottom))' : 0 }}>
@@ -325,6 +327,7 @@ return <ThemeProvider theme={theme}><CssBaseline/>
 </ListItemButton>)}</List>
 </Box>
 </Drawer>
-<TaskEditorDialog task={task} newDate={newDate} open={!!task || newDate !== null} mobile={mobile} onClose={() => { setTask(null); setNewDate(null); }} onSaved={() => { setTask(null); setNewDate(null); location.reload(); }}/>
+<TaskDetailsDialog task={task} open={!!task} mobile={mobile} refreshToken={refreshToken} onClose={() => setTask(null)} onEdit={nextTask => { releaseFocus(); setEditingTask(nextTask); }}/>
+<TaskEditorDialog task={editingTask} newDate={newDate} open={!!editingTask || newDate !== null} mobile={mobile} onClose={() => { setEditingTask(null); setNewDate(null); }} onSaved={() => { setEditingTask(null); setNewDate(null); setRefreshToken(value => value + 1); }}/>
 </Box>
 </ThemeProvider>; }

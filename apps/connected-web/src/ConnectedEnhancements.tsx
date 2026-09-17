@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Avatar, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
-import { Add, AttachFile, Delete, Edit, Link as LinkIcon, NotificationsActive, OpenInNew, Refresh, TableRows, ViewModule } from '@mui/icons-material';
+import { Add, ArrowBack, AttachFile, Call, Close, Delete, Edit, Email, Link as LinkIcon, NotificationsActive, OpenInNew, Person as PersonIcon, Refresh, TableRows, ViewModule, WhatsApp } from '@mui/icons-material';
 import { api } from './api';
 import type { ChecklistItem, Dashboard, NotificationItem, Person, Project, Task, TaskAttachment, TaskDependency, View } from './types';
 
@@ -10,7 +10,7 @@ function titleFor(view: View, override?: string) {
   return view[0].toUpperCase() + view.slice(1);
 }
 
-export function EnhancedTasksView({ view, query, title, onOpen, onNew }: { view: View; query?: Record<string, unknown>; title?: string; onOpen: (task: Task) => void; onNew: () => void }) {
+export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshToken = 0 }: { view: View; query?: Record<string, unknown>; title?: string; onOpen: (task: Task) => void; onNew: () => void; refreshToken?: number }) {
   const [data, setData] = useState<{ items: Task[]; total: number } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]),
     [people, setPeople] = useState<Person[]>([]);
@@ -41,7 +41,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew }: { view:
     } catch (reason) {
       setError((reason as Error).message);
     }
-  }, [view, JSON.stringify(query), JSON.stringify(filters)]);
+  }, [view, JSON.stringify(query), JSON.stringify(filters), refreshToken]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -537,6 +537,225 @@ export function NotificationBell() {
   );
 }
 
+function PersonDetailsDialog({ personId, fallbackName, open, onClose, mobile }: { personId: string | null; fallbackName?: string; open: boolean; onClose: () => void; mobile: boolean }) {
+  const [person, setPerson] = useState<Person | null>(null),
+    [error, setError] = useState(''),
+    [phoneActions, setPhoneActions] = useState(false);
+  useEffect(() => {
+    if (!open || !personId) return;
+    setPerson(null);
+    setError('');
+    api<Person>(`/people/details?personId=${encodeURIComponent(personId)}`)
+      .then(setPerson)
+      .catch((reason) => setError(reason.message));
+  }, [open, personId]);
+  const phone = person?.phone?.trim() || '';
+  const callablePhone = phone.replace(/[^\d+]/g, '');
+  const whatsappPhone = phone.replace(/\D/g, '');
+  const openExternal = (url: string) => {
+    if (url.startsWith('https://')) window.open(url, '_blank', 'noopener,noreferrer');
+    else window.location.href = url;
+  };
+  return (
+    <>
+      <Dialog open={open} onClose={onClose} fullScreen={mobile} fullWidth maxWidth="sm">
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <PersonIcon color="primary" />
+            <Box flex={1}>{person?.fullName || fallbackName || 'Contact details'}</Box>
+            <IconButton aria-label="Close contact details" onClick={onClose}><Close /></IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          {error && <Alert severity="error">{error}</Alert>}
+          {!person && !error && <LinearProgress />}
+          {person && (
+            <Stack spacing={2} mt={1}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="overline" color="text.secondary">Role and company</Typography>
+                <Typography>{[person.role, person.company].filter(Boolean).join(' · ') || 'Not specified'}</Typography>
+              </Paper>
+              <Button variant="outlined" startIcon={<Call />} disabled={!phone} onClick={() => setPhoneActions(true)} sx={{ justifyContent: 'flex-start', minHeight: 48 }}>
+                {phone || 'No phone number'}
+              </Button>
+              <Button variant="outlined" startIcon={<Email />} disabled={!person.email} onClick={() => openExternal(`mailto:${person.email}`)} sx={{ justifyContent: 'flex-start', minHeight: 48 }}>
+                {person.email || 'No email address'}
+              </Button>
+              {person.address && <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="overline" color="text.secondary">Address</Typography><Typography>{person.address}</Typography></Paper>}
+              {person.notes && <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="overline" color="text.secondary">Notes</Typography><Typography sx={{ whiteSpace: 'pre-wrap' }}>{person.notes}</Typography></Paper>}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions><Button onClick={onClose}>Close</Button></DialogActions>
+      </Dialog>
+      <Dialog open={phoneActions} onClose={() => setPhoneActions(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Contact {person?.fullName || fallbackName}</DialogTitle>
+        <DialogContent><Typography>How would you like to use {phone}?</Typography></DialogContent>
+        <DialogActions sx={{ flexWrap: 'wrap' }}>
+          <Button onClick={() => setPhoneActions(false)}>Cancel</Button>
+          <Button startIcon={<Call />} disabled={!callablePhone} onClick={() => openExternal(`tel:${callablePhone}`)}>Call</Button>
+          <Button variant="contained" startIcon={<WhatsApp />} disabled={!whatsappPhone} onClick={() => openExternal(`https://wa.me/${whatsappPhone}`)}>WhatsApp</Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+}
+
+type TaskDetailsPayload = {
+  task: Task;
+  checklist: ChecklistItem[];
+  dependencies: TaskDependency[];
+};
+
+export function TaskDetailsDialog({ task, open, onClose, onEdit, mobile, refreshToken = 0 }: { task: Task | null; open: boolean; onClose: () => void; onEdit: (task: Task) => void; mobile: boolean; refreshToken?: number }) {
+  const [history, setHistory] = useState<Task[]>([]),
+    [details, setDetails] = useState<TaskDetailsPayload | null>(null),
+    [attachments, setAttachments] = useState<TaskAttachment[]>([]),
+    [projects, setProjects] = useState<Project[]>([]),
+    [responsiblePerson, setResponsiblePerson] = useState<Person | null>(null),
+    [contactOpen, setContactOpen] = useState(false),
+    [error, setError] = useState(''),
+    [loading, setLoading] = useState(false);
+  const contentRef = useRef<HTMLDivElement | null>(null),
+    scrollPositions = useRef<Record<string, number>>({});
+  const current = history[history.length - 1] || task;
+  useEffect(() => {
+    if (open && task) {
+      setHistory([task]);
+      setDetails(null);
+      setAttachments([]);
+      setResponsiblePerson(null);
+      setContactOpen(false);
+      scrollPositions.current = {};
+    }
+  }, [open, task?.id]);
+  useEffect(() => {
+    if (!open || !current) return;
+    let active = true;
+    setLoading(true);
+    setError('');
+    Promise.all([
+      api<TaskDetailsPayload>(`/tasks/details?taskId=${encodeURIComponent(current.id)}`),
+      api<TaskAttachment[]>(`/tasks/attachments?taskId=${encodeURIComponent(current.id)}`),
+      api<Project[]>('/projects')
+    ])
+      .then(([nextDetails, nextAttachments, projectRows]) => {
+        if (!active) return;
+        const mergedTask = { ...current, ...nextDetails.task };
+        setDetails({ ...nextDetails, task: mergedTask });
+        setAttachments(nextAttachments);
+        setProjects(projectRows);
+        setHistory((value) => value.map((entry, index) => (index === value.length - 1 ? mergedTask : entry)));
+        setResponsiblePerson(null);
+        if (mergedTask.responsiblePersonId)
+          void api<Person>(`/people/details?personId=${encodeURIComponent(mergedTask.responsiblePersonId)}`)
+            .then((person) => active && setResponsiblePerson(person))
+            .catch(() => undefined);
+        requestAnimationFrame(() => {
+          if (contentRef.current) contentRef.current.scrollTop = scrollPositions.current[current.id] || 0;
+        });
+      })
+      .catch((reason) => active && setError(reason.message))
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [open, current?.id, refreshToken]);
+  const saveScroll = () => {
+    if (current && contentRef.current) scrollPositions.current[current.id] = contentRef.current.scrollTop;
+  };
+  const goBack = () => {
+    saveScroll();
+    if (history.length > 1) setHistory((value) => value.slice(0, -1));
+    else onClose();
+  };
+  const openDependency = (dependency: TaskDependency) => {
+    if (!dependency.prerequisiteTask) return;
+    saveScroll();
+    setHistory((value) => [...value, dependency.prerequisiteTask!]);
+  };
+  const openAttachment = async (attachment: TaskAttachment) => {
+    try {
+      const result = await api<{ url: string }>('/tasks/attachments/open', { method: 'POST', body: { id: attachment.id } });
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  };
+  const shownTask = details?.task || current;
+  const projectName = shownTask?.projectName || projects.find((project) => project.id === shownTask?.projectId)?.name;
+  const completedChecklist = details?.checklist.filter((item) => item.completed).length || 0;
+  return (
+    <>
+      <Dialog open={open} onClose={onClose} fullScreen={mobile} fullWidth maxWidth="md" slotProps={{ paper: { sx: mobile ? { height: '100dvh', maxHeight: '100dvh' } : undefined } }}>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <IconButton aria-label={history.length > 1 ? 'Back to previous task' : 'Back to task list'} onClick={goBack}><ArrowBack /></IconButton>
+            <Box flex={1} minWidth={0}>
+              <Typography variant="h6" noWrap>{shownTask?.title || 'Task details'}</Typography>
+              {history.length > 1 && <Typography variant="caption" color="text.secondary">Viewing linked task · {history.length} levels deep</Typography>}
+            </Box>
+            <IconButton aria-label="Close task details" onClick={onClose}><Close /></IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent ref={contentRef} sx={mobile ? { pb: 2 } : undefined}>
+          {loading && <LinearProgress sx={{ mb: 2 }} />}
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {shownTask && (
+            <Stack spacing={2} mt={1}>
+              {shownTask.description && <Paper variant="outlined" sx={{ p: 2 }}><Typography sx={{ whiteSpace: 'pre-wrap' }}>{shownTask.description}</Typography></Paper>}
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Chip label={shownTask.status.replaceAll('_', ' ')} color={shownTask.status === 'completed' ? 'success' : 'default'} />
+                <Chip label={`${shownTask.priority} priority`} color={shownTask.priority === 'critical' ? 'error' : shownTask.priority === 'high' ? 'warning' : 'primary'} />
+                {shownTask.blocked && <Chip label="Blocked" color="warning" />}
+                {shownTask.dueDate && <Chip label={`Due ${new Date(`${shownTask.dueDate}T12:00:00`).toLocaleDateString()}`} />}
+                {projectName && <Chip label={projectName} />}
+              </Stack>
+              {shownTask.responsiblePersonId && (
+                <Button variant="outlined" startIcon={<PersonIcon />} onClick={() => setContactOpen(true)} sx={{ justifyContent: 'flex-start', minHeight: 48 }}>
+                  Responsible: {responsiblePerson?.fullName || shownTask.responsiblePersonName || 'Open contact details'}
+                </Button>
+              )}
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Stack direction="row" justifyContent="space-between"><Typography variant="h6">Checklist</Typography><Typography color="text.secondary">{completedChecklist}/{details?.checklist.length || 0}</Typography></Stack>
+                <Stack spacing={1} mt={1}>
+                  {details?.checklist.map((item) => <Stack key={item.id || item.description} direction="row" spacing={1} alignItems="center"><Checkbox checked={item.completed} disabled /><Typography sx={{ textDecoration: item.completed ? 'line-through' : 'none' }}>{item.description}</Typography>{item.required && <Chip size="small" label="Required" />}</Stack>)}
+                  {!details?.checklist.length && <Typography color="text.secondary">No checklist items.</Typography>}
+                </Stack>
+              </Paper>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="h6">Blocking tasks and dependencies</Typography>
+                <Typography variant="body2" color="text.secondary" mb={1}>Select a prerequisite to open it. Back returns here.</Typography>
+                <Stack spacing={1}>
+                  {details?.dependencies.map((dependency) => (
+                    <Card key={dependency.id} variant="outlined">
+                      <CardActionArea disabled={!dependency.prerequisiteTask} onClick={() => openDependency(dependency)}>
+                        <CardContent>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                            <Box><Typography fontWeight={700}>{dependency.prerequisiteTitle}</Typography><Typography variant="body2" color="text.secondary">{dependency.prerequisiteStatus.replaceAll('_', ' ')} · {dependency.mandatory ? 'Required' : 'Optional'}</Typography></Box>
+                            <OpenInNew color="action" />
+                          </Stack>
+                        </CardContent>
+                      </CardActionArea>
+                    </Card>
+                  ))}
+                  {!details?.dependencies.length && <Typography color="text.secondary">No dependencies.</Typography>}
+                </Stack>
+              </Paper>
+              {!!attachments.length && <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="h6">Files and links</Typography><Stack spacing={0.5} mt={1}>{attachments.map((attachment) => <Button key={attachment.id} startIcon={attachment.mimeType === 'text/uri-list' ? <LinkIcon /> : <AttachFile />} endIcon={<OpenInNew />} onClick={() => void openAttachment(attachment)} sx={{ justifyContent: 'flex-start' }}>{attachment.displayName}</Button>)}</Stack></Paper>}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={mobile ? { position: 'sticky', bottom: 0, zIndex: 3, flexShrink: 0, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper', px: 2, pt: 1.25, pb: 'calc(20px + env(safe-area-inset-bottom))', boxShadow: '0 -8px 20px rgba(0,0,0,.18)', '& .MuiButton-root': { minHeight: 44 } } : undefined}>
+          <Button startIcon={<ArrowBack />} onClick={goBack}>{history.length > 1 ? 'Previous task' : 'Back to tasks'}</Button>
+          <Button variant="contained" startIcon={<Edit />} disabled={!shownTask} onClick={() => shownTask && onEdit(shownTask)}>Edit task</Button>
+        </DialogActions>
+      </Dialog>
+      <PersonDetailsDialog personId={shownTask?.responsiblePersonId || null} fallbackName={responsiblePerson?.fullName || shownTask?.responsiblePersonName} open={contactOpen} onClose={() => setContactOpen(false)} mobile={mobile} />
+    </>
+  );
+}
+
 export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile }: { task: Task | null; newDate: string | null; open: boolean; onClose: () => void; onSaved: () => void; mobile: boolean }) {
   const [editor, setEditor] = useState({
     title: '',
@@ -794,7 +1013,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
         }
       }}
     >
-      <DialogTitle>{task ? 'Task details' : 'Create task'}</DialogTitle>
+      <DialogTitle>{task ? 'Edit task' : 'Create task'}</DialogTitle>
       <DialogContent sx={mobile ? { pb: 2 } : undefined}>
         <Stack spacing={2} mt={1}>
           {error && <Alert severity="error">{error}</Alert>}
