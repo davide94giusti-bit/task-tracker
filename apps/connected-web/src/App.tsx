@@ -6,6 +6,7 @@ import { consumeAuthLink, resetPassword, session, signIn } from './auth';
 import { AccountSecurity, PasswordSetup, UsersAccessView } from './AccessViews';
 import { BackupImportView, DiagnosticsView } from './BackupDiagnosticsViews';
 import { EnhancedDashboardView, EnhancedTasksView, NotificationBell, TaskDetailsDialog, TaskEditorDialog } from './ConnectedEnhancements';
+import { DependencyLoadView } from './OperationalViews';
 import type { Dashboard, Person, Project, Task, View } from './types';
 // React 19 no longer exports JSX globally; this local bridge types stored icon elements.
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -117,7 +118,7 @@ return <>
 </Stack>
 <Typography variant="h4">{data.counts[key] || 0}</Typography>
 </Box>
-<Avatar sx={{ bgcolor: 'action.hover' }}>{label[0]}</Avatar>
+<Avatar sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', fontWeight: 800 }}>{label[0]}</Avatar>
 </Stack>
 </CardContent>
 </CardActionArea>
@@ -230,9 +231,11 @@ return <>
 </>; }
 function applicationServerKey(value: string) { const padding = '='.repeat((4 - value.length % 4) % 4), raw = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, character => character.charCodeAt(0)); }
 type NotificationPreferences={emailEnabled:boolean;pushEnabled:boolean;reminder:boolean;dueToday:boolean;overdue:boolean;dailySummary:boolean;timezone:string;quietStart:string;quietEnd:string;currencyCode:string};
+type NotificationReadiness={email:{providerConfigured:boolean;accountAddressAvailable:boolean;enabled:boolean};push:{providerConfigured:boolean;enabled:boolean;activeSubscriptions:number};scheduler:{cadenceMinutes:number;explicitTaskReminders:boolean;dueTodayAutomation:boolean;overdueAutomation:boolean;dailySummaryAutomation:boolean};deliveries:{pending:number;failed:number;delivered:number;latest:{status:string;createdAt:string;deliveredAt?:string|null;errorCode?:string|null}|null}};
 const defaultPreferences:NotificationPreferences={emailEnabled:false,pushEnabled:false,reminder:true,dueToday:true,overdue:true,dailySummary:false,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',quietStart:'22:00',quietEnd:'07:00',currencyCode:'CHF'};
-function SettingsView() { const [supported] = useState('serviceWorker' in navigator && 'PushManager' in window), [message, setMessage] = useState(''), [busy, setBusy] = useState(false), [preferences,setPreferences]=useState<NotificationPreferences>(defaultPreferences);
-useEffect(()=>{void api<NotificationPreferences|null>('/preferences').then(value=>value&&setPreferences({...defaultPreferences,...value})).catch(error=>setMessage(error.message))},[]);
+function SettingsView() { const [supported] = useState('serviceWorker' in navigator && 'PushManager' in window), [message, setMessage] = useState(''), [busy, setBusy] = useState(false), [preferences,setPreferences]=useState<NotificationPreferences>(defaultPreferences),[readiness,setReadiness]=useState<NotificationReadiness|null>(null);
+const loadReadiness=()=>api<NotificationReadiness>('/notifications/readiness').then(setReadiness).catch(error=>setMessage(error.message));
+useEffect(()=>{void Promise.all([api<NotificationPreferences|null>('/preferences').then(value=>value&&setPreferences({...defaultPreferences,...value})),loadReadiness()]).catch(error=>setMessage(error.message))},[]);
 const savePreferences=async(next:NotificationPreferences)=>{setPreferences(next);await api('/preferences',{method:'POST',body:next})};
 return <>
 <PageTitle title="Settings" subtitle="Notifications, email, timezone, and connected account."/>
@@ -253,18 +256,37 @@ return <>
         const subscriptionJson = subscription.toJSON();
         await api('/push/subscribe', { method: 'POST', body: { ...subscriptionJson, expirationTime: subscriptionJson.expirationTime ?? null, deviceLabel: navigator.userAgent.slice(0, 100) } });
         await savePreferences({...preferences,pushEnabled:true});
+        await loadReadiness();
         setMessage('Live notifications are enabled on this device.');
     }
     catch (error) { setMessage((error as Error).message); }
     finally { setBusy(false); }
 }}>Enable notifications</Button>
+<Button sx={{ mt: 2, ml: 1 }} variant="outlined" disabled={!supported || busy} onClick={async()=>{setBusy(true);try{const result=await api<{sent:number}>('/notifications/test-push',{method:'POST',body:{}});setMessage(`Test push sent to ${result.sent} device${result.sent===1?'':'s'}.`);await loadReadiness()}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}}>Send test push</Button>
+</CardContent>
+</Card>
+<Card>
+<CardContent>
+<Stack direction={{xs:'column',sm:'row'}} justifyContent="space-between" gap={1} mb={2}><Box><Typography variant="h6">Notification readiness</Typography><Typography color="text.secondary">Configuration and delivery evidence without exposing credentials.</Typography></Box><Button startIcon={<Refresh/>} onClick={()=>void loadReadiness()}>Refresh</Button></Stack>
+{!readiness?<LinearProgress/>:<Stack spacing={1.25}>
+<Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+<Chip color={readiness.email.providerConfigured&&readiness.email.accountAddressAvailable?'success':'error'} label={`Email provider ${readiness.email.providerConfigured?'configured':'missing'}`}/>
+<Chip color={readiness.email.enabled?'success':'default'} label={`Email ${readiness.email.enabled?'enabled':'disabled'}`}/>
+<Chip color={readiness.push.providerConfigured?'success':'error'} label={`Web push ${readiness.push.providerConfigured?'configured':'missing'}`}/>
+<Chip color={readiness.push.activeSubscriptions>0?'success':'warning'} label={`${readiness.push.activeSubscriptions} active push subscription${readiness.push.activeSubscriptions===1?'':'s'}`}/>
+</Stack>
+<Typography variant="body2">Reminder scheduler: every {readiness.scheduler.cadenceMinutes} minutes · explicit task reminders enabled.</Typography>
+<Typography variant="body2" color="text.secondary">Deliveries: {readiness.deliveries.delivered} delivered · {readiness.deliveries.pending} pending/retrying · {readiness.deliveries.failed} failed.</Typography>
+{readiness.deliveries.latest&&<Typography variant="caption" color="text.secondary">Latest delivery: {readiness.deliveries.latest.status} · {new Date(readiness.deliveries.latest.createdAt).toLocaleString()}{readiness.deliveries.latest.errorCode?` · ${readiness.deliveries.latest.errorCode}`:''}</Typography>}
+<Alert severity="info">Due-today, overdue, and daily-summary automation are not active yet. This version sends explicit task reminders configured in the task editor.</Alert>
+</Stack>}
 </CardContent>
 </Card>
 <Card>
 <CardContent>
 <Typography variant="h6">Email reminders</Typography>
 <Typography color="text.secondary">Reminder emails are sent to the email address used for this account: {session.get()?.user.email || 'current signed-in email'}.</Typography>
-<FormControlLabel control={<Switch checked={preferences.emailEnabled} disabled={busy} onChange={async event=>{setBusy(true);try{await savePreferences({...preferences,emailEnabled:event.target.checked});setMessage(event.target.checked?'Email reminders enabled.':'Email reminders disabled.')}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}}/>} label="Send reminder emails"/>
+<FormControlLabel control={<Switch checked={preferences.emailEnabled} disabled={busy} onChange={async event=>{setBusy(true);try{await savePreferences({...preferences,emailEnabled:event.target.checked});await loadReadiness();setMessage(event.target.checked?'Email reminders enabled.':'Email reminders disabled.')}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}}/>} label="Send reminder emails"/>
 <Button disabled={busy} onClick={async () => { setBusy(true); try { await api('/notifications/test-email', { method: 'POST', body: {} }); setMessage('Test email sent.'); } catch (error) { setMessage((error as Error).message); } finally { setBusy(false); } }}>Send test email</Button>
 </CardContent>
 </Card>
@@ -295,14 +317,14 @@ export default function App() { const [logged, setLogged] = useState(!!session.g
 const mobile = useMediaQuery('(max-width:800px)'); useEffect(()=>{void consumeAuthLink().then(mode=>{if(mode){setLogged(true);setAuthMode(mode)}})},[]); useEffect(()=>{if(logged)void api<{platformAdmin:boolean}>('/access/state').then(state=>setPlatformAdmin(state.platformAdmin)).catch(()=>setPlatformAdmin(false))},[logged]); useEffect(() => { const online = () => { setOffline(false); void flushQueue(); };
 const off = () => setOffline(true); addEventListener('online', online); addEventListener('offline', off);
 const focus = () => document.visibilityState === 'visible' && navigator.onLine && void flushQueue(); document.addEventListener('visibilitychange', focus); return () => { removeEventListener('online', online); removeEventListener('offline', off); document.removeEventListener('visibilitychange', focus); }; }, []);
-const theme = useMemo(() => createTheme({ palette: { mode: dark ? 'dark' : 'light', primary: { main: '#1d4ed8' }, background: { default: dark ? '#0c1220' : '#f4f7fb', paper: dark ? '#151d2e' : '#fff' } }, shape: { borderRadius: 12 }, typography: { fontFamily: 'Inter,Segoe UI,Arial,sans-serif', h4: { fontWeight: 800 }, h6: { fontWeight: 750 } }, components: { MuiButton: { defaultProps: { disableElevation: true } }, MuiCard: { styleOverrides: { root: { border: '1px solid', borderColor: dark ? '#26334a' : '#e4eaf2' } } } } }), [dark]); if(authMode)return <ThemeProvider theme={theme}><CssBaseline/><PasswordSetup mode={authMode} onDone={()=>{setAuthMode(null);setView('dashboard')}}/></ThemeProvider>; if (!logged)
+const theme = useMemo(() => createTheme({ palette: { mode: dark ? 'dark' : 'light', primary: { main: dark ? '#60a5fa' : '#1d4ed8', contrastText: dark ? '#07111f' : '#fff' }, background: { default: dark ? '#0c1220' : '#f4f7fb', paper: dark ? '#151d2e' : '#fff' } }, shape: { borderRadius: 12 }, typography: { fontFamily: 'Inter,Segoe UI,Arial,sans-serif', h4: { fontWeight: 800 }, h6: { fontWeight: 750 } }, components: { MuiButton: { defaultProps: { disableElevation: true }, styleOverrides: { outlined: { borderColor: dark ? '#64748b' : undefined } } }, MuiCard: { styleOverrides: { root: { border: '1px solid', borderColor: dark ? '#475569' : '#d5dde8' } } }, MuiOutlinedInput: { styleOverrides: { root: { '& .MuiOutlinedInput-notchedOutline': { borderColor: dark ? '#64748b' : '#94a3b8' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: dark ? '#93c5fd' : '#1d4ed8' } } } }, MuiToggleButton: { styleOverrides: { root: { borderColor: dark ? '#64748b' : '#94a3b8', '&.Mui-selected': { backgroundColor: dark ? '#334155' : '#dbeafe', color: dark ? '#fff' : '#1e3a8a' } } } } } }), [dark]); if(authMode)return <ThemeProvider theme={theme}><CssBaseline/><PasswordSetup mode={authMode} onDone={()=>{setAuthMode(null);setView('dashboard')}}/></ThemeProvider>; if (!logged)
     return <ThemeProvider theme={theme}><CssBaseline/>
 <Login />
 </ThemeProvider>;
 const releaseFocus = () => (document.activeElement as HTMLElement | null)?.blur();
 const openTask = (nextTask: Task) => { releaseFocus(); setTask(nextTask); };
 const openNewTask = (date = '') => { releaseFocus(); setNewDate(date); };
-const body = filter ? <EnhancedTasksView view="tasks" query={filter.q} title={filter.title} onOpen={openTask} onNew={() => openNewTask()} refreshToken={refreshToken}/> : view === 'dashboard' ? <EnhancedDashboardView openFilter={(title, q) => setFilter({ title, q })} openTask={openTask} refreshToken={refreshToken}/> : ['tasks', 'today', 'upcoming', 'completed', 'trash'].includes(view) ? <EnhancedTasksView view={view} onOpen={openTask} onNew={() => openNewTask()} refreshToken={refreshToken}/> : view === 'projects' ? <ProjectsView onOpen={project => setFilter({ title: project.name, q: { projectId: project.id } })}/> : view === 'people' ? <PeopleView onOpen={person => setFilter({ title: person.fullName, q: { responsiblePersonId: person.id } })}/> : view === 'calendar' ? <CalendarView onOpen={openTask} onNew={openNewTask}/> : view === 'settings' ? <SettingsView /> : view==='access'?(platformAdmin?<UsersAccessView/>:<Alert severity="info">Only the platform administrator can invite and manage application users.</Alert>):view==='security'?<AccountSecurity/>:view==='backup'?<BackupImportView/>:view==='diagnostics'?<DiagnosticsView/>:<Generic view={view}/>;
+const body = filter ? <EnhancedTasksView view="tasks" query={filter.q} title={filter.title} onOpen={openTask} onNew={() => openNewTask()} refreshToken={refreshToken}/> : view === 'dashboard' ? <EnhancedDashboardView openFilter={(title, q) => setFilter({ title, q })} openTask={openTask} refreshToken={refreshToken}/> : ['tasks', 'today', 'upcoming', 'completed', 'trash'].includes(view) ? <EnhancedTasksView view={view} onOpen={openTask} onNew={() => openNewTask()} refreshToken={refreshToken}/> : view === 'projects' ? <ProjectsView onOpen={project => setFilter({ title: project.name, q: { projectId: project.id } })}/> : view === 'people' ? <PeopleView onOpen={person => setFilter({ title: person.fullName, q: { responsiblePersonId: person.id } })}/> : view === 'dependencies' ? <DependencyLoadView onOpenTasks={(personId, personName) => setFilter({ title: `${personName} active tasks`, q: personId ? { responsiblePersonId: personId } : {} })}/> : view === 'calendar' ? <CalendarView onOpen={openTask} onNew={openNewTask}/> : view === 'settings' ? <SettingsView /> : view==='access'?(platformAdmin?<UsersAccessView/>:<Alert severity="info">Only the platform administrator can invite and manage application users.</Alert>):view==='security'?<AccountSecurity/>:view==='backup'?<BackupImportView/>:view==='diagnostics'?<DiagnosticsView/>:<Generic view={view}/>;
 const navigate = (v: View) => { releaseFocus(); setFilter(null); setView(v); setDrawer(false); history.replaceState(null, '', `?view=${v}`); };
 return <ThemeProvider theme={theme}><CssBaseline/>
 <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary', pb: mobile ? 'calc(76px + env(safe-area-inset-bottom))' : 0 }}>

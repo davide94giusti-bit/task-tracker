@@ -71,6 +71,33 @@ export default <WorkerHandler<Env>>{
         const input = RecordId.parse(await body(request));
         return json(await call(env.DATA, "/write", env, context, { method: "POST", body: JSON.stringify({ table: "notification_deliveries", method: "patch", id: input.id, row: { read_at: new Date().toISOString() } }) }), 200, requestId);
       }
+      if (url.pathname === "/readiness") {
+        const [preferences, subscriptions, deliveries] = await Promise.all([
+          select(env, context, "notification_preferences", { user_id: context.userId }, 1),
+          select(env, context, "push_subscriptions", { user_id: context.userId, disabled: false }, 100),
+          select(env, context, "notification_deliveries", { user_id: context.userId }, 100),
+        ]);
+        const latest = deliveries.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0] || null;
+        return json({
+          email: {
+            providerConfigured: Boolean(env.RESEND_API_KEY && env.RESEND_FROM),
+            accountAddressAvailable: Boolean(context.email),
+            enabled: Boolean(preferences[0]?.emailEnabled),
+          },
+          push: {
+            providerConfigured: Boolean(env.VAPID_SUBJECT && env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_JWK),
+            enabled: Boolean(preferences[0]?.pushEnabled),
+            activeSubscriptions: subscriptions.length,
+          },
+          scheduler: { cadenceMinutes: 5, explicitTaskReminders: true, dueTodayAutomation: false, overdueAutomation: false, dailySummaryAutomation: false },
+          deliveries: {
+            pending: deliveries.filter(item => ['pending', 'retry'].includes(item.status)).length,
+            failed: deliveries.filter(item => item.status === 'failed').length,
+            delivered: deliveries.filter(item => item.status === 'delivered').length,
+            latest: latest ? { status: latest.status, createdAt: latest.createdAt, deliveredAt: latest.deliveredAt || null, errorCode: latest.lastErrorCode || null } : null,
+          },
+        }, 200, requestId);
+      }
       if (url.pathname === "/preferences") {
         const existing = await select(env, context, "notification_preferences", { user_id: context.userId }, 1);
         if (request.method === "GET") return json(existing[0] || null, 200, requestId);
@@ -94,6 +121,24 @@ export default <WorkerHandler<Env>>{
       if (url.pathname === "/test-email") {
         if (!context.email) throw new Error("No account email is available");
         return json(await email(env, context.email, { title: "Your Task Tracker email connection works", dateLabel: new Date().toLocaleString(), url: env.APP_URL, kind: "Test email" }, `test-${context.userId}-${crypto.randomUUID()}`), 200, requestId);
+      }
+      if (url.pathname === "/test-push") {
+        if (!(env.VAPID_SUBJECT && env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_JWK)) throw Object.assign(new Error("Web-push credentials are not configured"), { status: 503 });
+        const subscriptions = await select(env, context, "push_subscriptions", { user_id: context.userId, disabled: false }, 100);
+        if (!subscriptions.length) throw Object.assign(new Error("No active push subscription exists for this account. Enable notifications on this device first."), { status: 409 });
+        let sent = 0;
+        for (const subscription of subscriptions) {
+          const response = await sendWebPush(
+            { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
+            { title: "Task Tracker", body: "Test notification delivered successfully.", url: env.APP_URL, tag: `test-${crypto.randomUUID()}` },
+            { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateJwk: env.VAPID_PRIVATE_JWK },
+          );
+          if (response.ok) sent++;
+          else if (response.status === 404 || response.status === 410)
+            await call(env.DATA, "/write", env, context, { method: "POST", body: JSON.stringify({ table: "push_subscriptions", method: "patch", id: subscription.id, row: { disabled: true } }) });
+        }
+        if (!sent) throw Object.assign(new Error("No test notification could be delivered. Re-enable notifications on this device."), { status: 502 });
+        return json({ sent, subscriptions: subscriptions.length }, 200, requestId);
       }
       return json({ code: "NOT_FOUND", message: "Notification route not found", service: "connected-notifications", requestId, retryable: false }, 404, requestId);
     });

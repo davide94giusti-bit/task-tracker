@@ -61,6 +61,8 @@ const routes: Array<[string, RegExp, keyof Env, string]> = [
   ["POST", /^\/v1\/reminders\/snooze$/, "REMINDERS", "/snooze"],
   ["POST", /^\/v1\/push\/subscribe$/, "NOTIFICATIONS", "/subscribe"],
   ["POST", /^\/v1\/notifications\/test-email$/, "NOTIFICATIONS", "/test-email"],
+  ["POST", /^\/v1\/notifications\/test-push$/, "NOTIFICATIONS", "/test-push"],
+  ["GET", /^\/v1\/notifications\/readiness$/, "NOTIFICATIONS", "/readiness"],
   ["GET", /^\/v1\/notifications\/inbox$/, "NOTIFICATIONS", "/inbox"],
   ["POST", /^\/v1\/notifications\/read$/, "NOTIFICATIONS", "/read"],
   ["GET", /^\/v1\/preferences$/, "NOTIFICATIONS", "/preferences"],

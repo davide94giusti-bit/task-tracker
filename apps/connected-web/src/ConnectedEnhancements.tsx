@@ -34,6 +34,10 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
         ...query,
         ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value))
       } as Record<string, string>;
+      if (merged.status === 'blocked') {
+        delete merged.status;
+        merged.blocked = 'true';
+      }
       const [tasks, projectRows, peopleRows] = await Promise.all([api<{ items: Task[]; total: number }>(`/tasks?${new URLSearchParams(merged)}`), api<Project[]>('/projects'), api<Person[]>('/people')]);
       setData(tasks);
       setProjects(projectRows);
@@ -76,17 +80,20 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
     <Card key={task.id} variant="outlined" sx={{ borderLeft: `4px solid ${priorityColor(task)}`, minHeight: 178 }}>
       <CardActionArea onClick={() => onOpen(task)} sx={{ height: '100%' }}>
         <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Chip
-              size="small"
-              label={task.priority}
-              sx={{
-                textTransform: 'capitalize',
-                bgcolor: priorityColor(task),
-                color: '#08111f',
-                fontWeight: 800
-              }}
-            />
+          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <Chip
+                size="small"
+                label={task.priority}
+                sx={{
+                  textTransform: 'capitalize',
+                  bgcolor: priorityColor(task),
+                  color: task.priority === 'high' ? '#111827' : '#fff',
+                  fontWeight: 800
+                }}
+              />
+              {task.blocked && <Chip size="small" label="Blocked" color="warning" variant="outlined" sx={{ fontWeight: 700 }} />}
+            </Stack>
             <Typography variant="caption" fontWeight={700}>
               {formatDue(task.dueDate)}
             </Typography>
@@ -194,21 +201,23 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
             <MenuItem value="updated">Recently updated</MenuItem>
           </TextField>
           <Box flex={1} />
-          <ToggleButtonGroup exclusive size="small" value={layout} onChange={(_, value) => value && setLayout(value)} aria-label="Task layout">
-            <ToggleButton value="table" aria-label="Table view">
-              <TableRows sx={{ mr: 0.5 }} />
-              Table
-            </ToggleButton>
-            <ToggleButton value="cards" aria-label="Card view">
-              <ViewModule sx={{ mr: 0.5 }} />
-              Cards
-            </ToggleButton>
-          </ToggleButtonGroup>
-          <Tooltip title="Refresh tasks">
-            <IconButton onClick={load}>
-              <Refresh />
-            </IconButton>
-          </Tooltip>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            <ToggleButtonGroup exclusive size="small" value={layout} onChange={(_, value) => value && setLayout(value)} aria-label="Task layout">
+              <ToggleButton value="table" aria-label="Table view">
+                <TableRows sx={{ mr: 0.5 }} />
+                Table
+              </ToggleButton>
+              <ToggleButton value="cards" aria-label="Card view">
+                <ViewModule sx={{ mr: 0.5 }} />
+                Cards
+              </ToggleButton>
+            </ToggleButtonGroup>
+            <Tooltip title="Refresh tasks">
+              <IconButton aria-label="Refresh tasks" onClick={load}>
+                <Refresh />
+              </IconButton>
+            </Tooltip>
+          </Stack>
         </Stack>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} mt={1}>
           <TextField size="small" label="Search" value={filters.search} onChange={(event) => setFilters((value) => ({ ...value, search: event.target.value }))} />
@@ -236,7 +245,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
             <MenuItem value="">All statuses</MenuItem>
             {['not_started', 'in_progress', 'waiting', 'blocked', 'completed'].map((value) => (
               <MenuItem key={value} value={value}>
-                {value.replaceAll('_', ' ')}
+                {value === 'blocked' ? 'Blocked by dependency' : value.replaceAll('_', ' ')}
               </MenuItem>
             ))}
           </TextField>
@@ -296,7 +305,10 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip size="small" variant="outlined" color="primary" label={task.status.replaceAll('_', ' ')} />
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                        <Chip size="small" variant="outlined" color="primary" label={task.status.replaceAll('_', ' ')} />
+                        {task.blocked && <Chip size="small" variant="outlined" color="warning" label="Blocked" />}
+                      </Stack>
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -305,7 +317,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
                         sx={{
                           textTransform: 'capitalize',
                           bgcolor: priorityColor(task),
-                          color: '#08111f',
+                          color: task.priority === 'high' ? '#111827' : '#fff',
                           fontWeight: 800,
                           minWidth: 90
                         }}
@@ -488,7 +500,7 @@ export function EnhancedDashboardView({ openFilter, openTask, refreshToken = 0 }
                         <Typography color="text.secondary">{label}</Typography>
                         <Typography variant="h4">{data.counts[key] || 0}</Typography>
                       </Box>
-                      <Avatar sx={{ bgcolor: 'action.hover' }}>{label[0]}</Avatar>
+                      <Avatar sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', fontWeight: 800 }}>{label[0]}</Avatar>
                     </Stack>
                   </CardContent>
                 </CardActionArea>
@@ -802,6 +814,7 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, mo
           status: 'completed',
           priority: shownTask.priority,
           dueDate: shownTask.dueDate || null,
+          reminderAt: shownTask.reminderAt || null,
           projectId: shownTask.projectId || null,
           responsiblePersonId: shownTask.responsiblePersonId || null,
           costAmount: shownTask.costAmount ?? null,
@@ -839,6 +852,7 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, mo
                 <Chip label={`${shownTask.priority} priority`} color={shownTask.priority === 'critical' ? 'error' : shownTask.priority === 'high' ? 'warning' : 'primary'} />
                 {shownTask.blocked && <Chip label="Blocked" color="warning" />}
                 {shownTask.dueDate && <Chip label={`Due ${new Date(`${shownTask.dueDate}T12:00:00`).toLocaleDateString()}`} />}
+                {shownTask.reminderAt && <Chip label={`Reminder ${new Date(shownTask.reminderAt).toLocaleString()}`} variant="outlined" />}
                 {projectName && <Chip label={projectName} />}
               </Stack>
               {shownTask.responsiblePersonId && (
@@ -894,6 +908,12 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, mo
   );
 }
 
+const reminderInputValue = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
+
 export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile }: { task: Task | null; newDate: string | null; open: boolean; onClose: () => void; onSaved: () => void; mobile: boolean }) {
   const [editor, setEditor] = useState({
     title: '',
@@ -901,6 +921,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
     status: 'not_started',
     priority: 'medium',
     dueDate: '',
+    reminderAt: '',
     projectId: '',
     responsiblePersonId: '',
     costAmount: ''
@@ -930,6 +951,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
       status: task?.status || 'not_started',
       priority: task?.priority || 'medium',
       dueDate: newDate || task?.dueDate || '',
+      reminderAt: reminderInputValue(task?.reminderAt),
       projectId: task?.projectId || '',
       responsiblePersonId: task?.responsiblePersonId || '',
       costAmount: task?.costAmount === null || task?.costAmount === undefined ? '' : String(task.costAmount)
@@ -1111,6 +1133,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
         status: editor.status,
         priority: editor.priority,
         dueDate: editor.dueDate || null,
+        reminderAt: editor.reminderAt ? new Date(editor.reminderAt).toISOString() : null,
         projectId: editor.projectId || null,
         responsiblePersonId: editor.responsiblePersonId || null,
         costAmount: editor.costAmount === '' ? null : Number(editor.costAmount.replace(',', '.'))
@@ -1240,7 +1263,10 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
               ))}
             </TextField>
           </Stack>
-          <TextField label="Due date" type="date" value={editor.dueDate} onChange={(event) => setEditor((value) => ({ ...value, dueDate: event.target.value }))} slotProps={{ inputLabel: { shrink: true } }} />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField fullWidth label="Due date" type="date" value={editor.dueDate} onChange={(event) => setEditor((value) => ({ ...value, dueDate: event.target.value }))} slotProps={{ inputLabel: { shrink: true } }} />
+            <TextField fullWidth label="Reminder date and time" type="datetime-local" value={editor.reminderAt} onChange={(event) => setEditor((value) => ({ ...value, reminderAt: event.target.value }))} helperText="Leave empty for no scheduled notification." slotProps={{ inputLabel: { shrink: true } }} />
+          </Stack>
           <TextField
             label={`Task cost (${currencyCode})`}
             type="number"
