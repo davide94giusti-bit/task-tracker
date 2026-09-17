@@ -60,16 +60,27 @@ async function authAdmin(env: Env, path: string, init: RequestInit = {}) {
   };
   if (env.SUPABASE_SECRET_KEY.split(".").length === 3)
     headers.Authorization = `Bearer ${env.SUPABASE_SECRET_KEY}`;
-  const response = await fetch(`${env.SUPABASE_URL}/auth/v1/admin${path}`, {
+  // Supabase's invitation endpoint is /auth/v1/invite. User-management
+  // operations live below /auth/v1/admin, so they cannot share one prefix.
+  const endpoint =
+    path === "/invite"
+      ? `${env.SUPABASE_URL}/auth/v1/invite`
+      : `${env.SUPABASE_URL}/auth/v1/admin${path}`;
+  const response = await fetch(endpoint, {
     ...init,
     headers: { ...headers, ...init.headers },
   });
-  if (!response.ok)
+  const responseText = await response.text();
+  if (!response.ok) {
+    const detail = responseText.trim().slice(0, 240);
     throw Object.assign(
-      new Error(`Identity provider operation failed (${response.status})`),
+      new Error(
+        `Identity provider operation failed (${response.status})${detail ? `: ${detail}` : ""}`,
+      ),
       { status: response.status },
     );
-  return response.json();
+  }
+  return responseText ? JSON.parse(responseText) : null;
 }
 async function audit(
   env: Env,

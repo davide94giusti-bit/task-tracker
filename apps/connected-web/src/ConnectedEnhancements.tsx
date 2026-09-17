@@ -136,7 +136,15 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew }: { view:
           <TextField
             select
             size="small"
+            label="Priority"
             value={filters.priority}
+            slotProps={{
+              inputLabel: { shrink: true },
+              select: {
+                displayEmpty: true,
+                renderValue: (selected: unknown) => (selected ? String(selected).replaceAll('_', ' ') : 'All priorities')
+              }
+            }}
             onChange={(event) =>
               setFilters((value) => ({
                 ...value,
@@ -155,7 +163,15 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew }: { view:
           <TextField
             select
             size="small"
+            label="Project"
             value={filters.projectId}
+            slotProps={{
+              inputLabel: { shrink: true },
+              select: {
+                displayEmpty: true,
+                renderValue: (selected: unknown) => projects.find((project) => project.id === selected)?.name || 'All projects'
+              }
+            }}
             onChange={(event) =>
               setFilters((value) => ({
                 ...value,
