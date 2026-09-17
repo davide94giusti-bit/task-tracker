@@ -389,10 +389,17 @@ return <ThemeProvider theme={theme}><CssBaseline/>
 </BottomNavigation>
 </Paper>}<Drawer anchor="right" open={mobile && drawer} onClose={() => { releaseFocus(); setDrawer(false); }}>
 <Box sx={{ width: 'min(88vw,360px)', pt: 'env(safe-area-inset-top)' }}>
-<List>{nav.filter(n => !['dashboard', 'today', 'tasks', 'calendar'].includes(n.view) && (n.view !== 'access' || platformAdmin)).map(n => <ListItemButton key={n.view} onClick={() => navigate(n.view)}>
-<ListItemIcon>{n.icon}</ListItemIcon>
-<ListItemText primary={n.label}/>
-</ListItemButton>)}</List>
+<List>{['Tasks', 'Organization', 'System'].map((group, index) => {
+  const mobileGroupKey = `mobile-${group}`, groupItems = nav.filter(n => n.group === group && !['dashboard', 'today', 'tasks', 'calendar'].includes(n.view) && (n.view !== 'access' || platformAdmin));
+  if (!groupItems.length) return null;
+  return <Box key={group}>{index > 0 && <Divider/>}<ListItemButton aria-expanded={!collapsedGroups[mobileGroupKey]} onClick={() => setCollapsedGroups(value => ({ ...value, [mobileGroupKey]: !value[mobileGroupKey] }))}>
+    <ListItemText primary={group} primaryTypographyProps={{ variant: 'overline', fontWeight: 800 }}/>
+    {collapsedGroups[mobileGroupKey] ? <ExpandMore/> : <ExpandLess/>}
+  </ListItemButton>{!collapsedGroups[mobileGroupKey] && groupItems.map(n => <ListItemButton key={n.view} selected={view === n.view && !filter} onClick={() => navigate(n.view)} sx={{ pl: 3 }}>
+    <ListItemIcon>{n.icon}</ListItemIcon>
+    <ListItemText primary={n.label}/>
+  </ListItemButton>)}</Box>;
+})}</List>
 </Box>
 </Drawer>
 <TaskDetailsDialog task={task} open={!!task} mobile={mobile} refreshToken={refreshToken} onClose={() => setTask(null)} onEdit={nextTask => { releaseFocus(); setEditingTask(nextTask); }} onCompleted={() => setRefreshToken(value => value + 1)} onDeleted={() => { setTask(null); setRefreshToken(value => value + 1); }}/>

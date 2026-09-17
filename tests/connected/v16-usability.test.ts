@@ -52,4 +52,10 @@ describe('v16 usability and reliability', () => {
     expect(manual).toContain('Checklist or separate task?');
     expect(manual).toContain('another person is accountable');
   });
+
+  it('groups the mobile More menu into collapsible macro areas', () => {
+    expect(app).toContain("['Tasks', 'Organization', 'System'].map");
+    expect(app).toContain('const mobileGroupKey = `mobile-${group}`');
+    expect(app).toContain('collapsedGroups[mobileGroupKey]');
+  });
 });
