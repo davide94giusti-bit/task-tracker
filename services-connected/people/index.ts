@@ -13,6 +13,21 @@ import type { BaseEnv, Fetcher, WorkerHandler } from "../_shared/types";
 interface Env extends BaseEnv {
   DATA: Fetcher;
 }
+const encode = (bytes: ArrayBuffer) =>
+  btoa(String.fromCharCode(...new Uint8Array(bytes)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+async function shareToken(id: string, secret: string) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return `${id}.${encode(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(id)))}`;
+}
 export default <WorkerHandler<Env>>{
   async fetch(request, env) {
     return withRequest("connected-people", request, env, async (requestId) => {
@@ -79,6 +94,49 @@ export default <WorkerHandler<Env>>{
           200,
           requestId,
         );
+      }
+      if (url.pathname === "/share-link") {
+        const input = (await body(request)) as { personId?: string; action?: string };
+        const personId = Uuid.parse(input.personId);
+        const action = input.action || "ensure";
+        if (!["ensure", "regenerate", "revoke"].includes(action))
+          throw Object.assign(new Error("Invalid share-link action"), { status: 400 });
+        const people = (await call(env.DATA, "/select", env, context, {
+          method: "POST",
+          body: JSON.stringify({ table: "people", filters: { id: personId, deleted_at: null }, limit: 1 }),
+        })) as any[];
+        if (!people.length)
+          throw Object.assign(new Error("Contact not found"), { status: 404 });
+        let active = (await call(env.DATA, "/select", env, context, {
+          method: "POST",
+          body: JSON.stringify({ table: "person_task_shares", filters: { person_id: personId, revoked_at: null }, limit: 20 }),
+        })) as any[];
+        if (action === "revoke" || action === "regenerate") {
+          await Promise.all(active.map((row) => call(env.DATA, "/write", env, context, {
+            method: "POST",
+            body: JSON.stringify({ table: "person_task_shares", method: "patch", id: row.id, row: { revoked_at: new Date().toISOString() } }),
+          })));
+          active = [];
+        }
+        if (action === "revoke") return json({ active: false }, 200, requestId);
+        let share = active[0];
+        if (!share) {
+          try {
+            const created = (await call(env.DATA, "/write", env, context, {
+              method: "POST",
+              body: JSON.stringify({ table: "person_task_shares", method: "post", row: { id: crypto.randomUUID(), person_id: personId, created_by: context.userId } }),
+            })) as any[];
+            share = created[0];
+          } catch {
+            const concurrent = (await call(env.DATA, "/select", env, context, {
+              method: "POST",
+              body: JSON.stringify({ table: "person_task_shares", filters: { person_id: personId, revoked_at: null }, limit: 1 }),
+            })) as any[];
+            share = concurrent[0];
+            if (!share) throw new Error("Unable to create the shared-task link");
+          }
+        }
+        return json({ active: true, token: await shareToken(share.id, env.INTERNAL_SERVICE_TOKEN) }, 200, requestId);
       }
       return json(
         {

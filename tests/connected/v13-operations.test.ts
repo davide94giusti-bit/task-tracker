@@ -37,7 +37,7 @@ describe('v13 operational polish', () => {
     const app = read('apps/connected-web/src/App.tsx');
     const styles = read('apps/connected-web/src/styles.css');
     expect(app).toContain("dark ? '#60a5fa' : '#1d4ed8'");
-    expect(app).toContain("bgcolor: 'primary.main', color: 'primary.contrastText'");
+    expect(app).not.toContain('{label[0]}</Avatar>');
     expect(styles).toContain('.calendar-day .MuiCardActionArea-root');
     expect(styles).toMatch(/\.calendar-count\s*\{[^}]*left:\s*50%;[^}]*bottom:\s*10px;/s);
   });

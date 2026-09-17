@@ -14,7 +14,7 @@ type DependencyLoadRow = {
   impactScore: number;
 };
 
-export function DependencyLoadView({ onOpenTasks }: { onOpenTasks: (personId: string | null, personName: string) => void }) {
+export function DependencyLoadView({ onOpenTasks }: { onOpenTasks: (title: string, query: Record<string, unknown>) => void }) {
   const [rows, setRows] = useState<DependencyLoadRow[] | null>(null);
   const [error, setError] = useState('');
   const load = useCallback(async () => {
@@ -52,11 +52,11 @@ export function DependencyLoadView({ onOpenTasks }: { onOpenTasks: (personId: st
         <>
           <Box className="metric-grid" mb={2}>
             {[
-              ['People with blockers', totals.people],
-              ['Affected tasks', totals.tasks],
-              ['Overdue prerequisites', totals.overdue]
-            ].map(([label, value]) => (
-              <Card key={String(label)} variant="outlined"><CardContent><Typography color="text.secondary">{label}</Typography><Typography variant="h4">{value}</Typography></CardContent></Card>
+              ['People with blockers', totals.people, 'All blocking prerequisites', { dependencyRole: 'prerequisite' }],
+              ['Affected tasks', totals.tasks, 'Tasks blocked by dependencies', { blocked: 'true' }],
+              ['Overdue prerequisites', totals.overdue, 'Overdue blocking prerequisites', { dependencyRole: 'prerequisite', due: 'overdue' }]
+            ].map(([label, value, title, query]) => (
+              <Card key={String(label)} variant="outlined"><CardActionArea onClick={() => onOpenTasks(String(title), query as Record<string, unknown>)}><CardContent><Typography color="text.secondary">{String(label)}</Typography><Typography variant="h4">{String(value)}</Typography><Typography variant="caption" color="primary">View tasks</Typography></CardContent></CardActionArea></Card>
             ))}
           </Box>
           {!rows.length ? (
@@ -68,7 +68,7 @@ export function DependencyLoadView({ onOpenTasks }: { onOpenTasks: (personId: st
             <Stack spacing={1.25}>
               {rows.map((row) => (
                 <Card key={row.personId || 'unassigned'} variant="outlined">
-                  <CardActionArea onClick={() => onOpenTasks(row.personId, row.personName)}>
+                  <CardActionArea onClick={() => onOpenTasks(`${row.personName} blocking prerequisites`, { dependencyRole: 'prerequisite', ...(row.personId ? { responsiblePersonId: row.personId } : {}) })}>
                     <CardContent>
                       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={2}>
                         <Box>
@@ -79,6 +79,7 @@ export function DependencyLoadView({ onOpenTasks }: { onOpenTasks: (personId: st
                           {row.overduePrerequisites > 0 && <Chip color="error" label={`${row.overduePrerequisites} overdue`} />}
                           {row.criticalHighImpact > 0 && <Chip color="warning" label={`${row.criticalHighImpact} critical/high`} />}
                           <Chip color="primary" label={`Impact ${row.impactScore}`} />
+                          <Typography variant="caption" color="primary">View blocking tasks</Typography>
                         </Stack>
                       </Stack>
                     </CardContent>

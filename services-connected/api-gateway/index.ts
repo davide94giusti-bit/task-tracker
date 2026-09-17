@@ -47,6 +47,7 @@ const routes: Array<[string, RegExp, keyof Env, string]> = [
   ["GET", /^\/v1\/people$/, "PEOPLE", "/list"],
   ["GET", /^\/v1\/people\/details$/, "PEOPLE", "/details"],
   ["POST", /^\/v1\/people\/save$/, "PEOPLE", "/save"],
+  ["POST", /^\/v1\/people\/share-link$/, "PEOPLE", "/share-link"],
   ["GET", /^\/v1\/dependencies\/people-load$/, "DEPENDENCIES", "/people-load"],
   ["POST", /^\/v1\/dependencies\/link$/, "DEPENDENCIES", "/link"],
   ["POST", /^\/v1\/dependencies\/unlink$/, "DEPENDENCIES", "/unlink"],
@@ -117,6 +118,19 @@ const cors = (origin: string, env: Env) => {
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
   };
 };
+const decodeSignature = (value: string) => {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+};
+async function verifyShareToken(token: string, secret: string) {
+  const [id, signature, extra] = token.split(".");
+  if (!id || !signature || extra || !/^[0-9a-f-]{36}$/i.test(id))
+    throw Object.assign(new Error("This shared-task link is invalid"), { status: 404 });
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  const valid = await crypto.subtle.verify("HMAC", key, decodeSignature(signature), new TextEncoder().encode(id));
+  if (!valid) throw Object.assign(new Error("This shared-task link is invalid"), { status: 404 });
+  return id;
+}
 export default <WorkerHandler<Env>>{
   async fetch(request, env) {
     return withRequest("connected-gateway", request, env, async (requestId) => {
@@ -156,6 +170,16 @@ export default <WorkerHandler<Env>>{
           new Error("Origin not allowed"),
           403,
         );
+      if (request.method === "GET" && url.pathname === "/v1/public/person-tasks") {
+        const shareId = await verifyShareToken(url.searchParams.get("token") || "", env.INTERNAL_SERVICE_TOKEN);
+        const result = await call(env.DATA, "/public/person-tasks", env, undefined, {
+          method: "POST",
+          body: JSON.stringify({ shareId }),
+          headers: { "x-request-id": requestId },
+        });
+        if (!result) throw Object.assign(new Error("This shared-task link is unavailable or has been revoked"), { status: 404 });
+        return json(result, 200, requestId, headers || {});
+      }
       const base = await authenticate(request, env),
         access = accessRoutes.find(
           ([method, re]) => method === request.method && re.test(url.pathname),

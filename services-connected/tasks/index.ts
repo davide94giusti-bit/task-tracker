@@ -56,14 +56,21 @@ export default <WorkerHandler<Env>>{
             pageSize: raw.pageSize ? Number(raw.pageSize) : undefined,
             blocked: raw.blocked === "true" ? true : undefined,
           });
-        return json(
-          await call(env.DATA, "/tasks/list", env, context, {
+        const result = (await call(env.DATA, "/tasks/list", env, context, {
             method: "POST",
             body: JSON.stringify(query),
-          }),
-          200,
-          requestId,
-        );
+          })) as { items: any[]; total: number; page: number; pageSize: number };
+        if (query.dependencyRole === "prerequisite") {
+          const [tasks, dependencies] = await Promise.all([
+            allRows(env, context, "tasks", { deleted_at: null }),
+            allRows(env, context, "task_dependencies", { deleted_at: null, mandatory: true }),
+          ]);
+          const active = new Map(tasks.filter((task) => !task.archived && !["completed", "cancelled", "archived"].includes(task.status)).map((task) => [task.id, task]));
+          const prerequisiteIds = new Set(dependencies.filter((dependency) => active.has(dependency.waitingTaskId) && active.has(dependency.prerequisiteTaskId)).map((dependency) => dependency.prerequisiteTaskId));
+          result.items = result.items.filter((task) => prerequisiteIds.has(task.id));
+          result.total = result.items.length;
+        }
+        return json(result, 200, requestId);
       }
       if (url.pathname === "/save") {
         const input = TaskWrite.parse(await body(request));

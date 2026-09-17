@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Avatar, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
+import { Alert, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { Add, ArrowBack, AttachFile, Call, CheckCircle, Close, Delete, Edit, Email, Link as LinkIcon, NotificationsActive, OpenInNew, Person as PersonIcon, Refresh, TableRows, ViewModule, WhatsApp } from '@mui/icons-material';
 import { api } from './api';
 import type { ChecklistItem, CostEntry, CostSummary, Dashboard, NotificationItem, Person, Project, Task, TaskAttachment, TaskDependency, View } from './types';
@@ -200,8 +200,8 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
             <MenuItem value="priority">Priority</MenuItem>
             <MenuItem value="updated">Recently updated</MenuItem>
           </TextField>
-          <Box flex={1} />
-          <Stack direction="row" spacing={0.5} alignItems="center">
+        </Stack>
+        <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" mt={1}>
             <ToggleButtonGroup exclusive size="small" value={layout} onChange={(_, value) => value && setLayout(value)} aria-label="Task layout">
               <ToggleButton value="table" aria-label="Table view">
                 <TableRows sx={{ mr: 0.5 }} />
@@ -217,7 +217,6 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
                 <Refresh />
               </IconButton>
             </Tooltip>
-          </Stack>
         </Stack>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} mt={1}>
           <TextField size="small" label="Search" value={filters.search} onChange={(event) => setFilters((value) => ({ ...value, search: event.target.value }))} />
@@ -500,7 +499,6 @@ export function EnhancedDashboardView({ openFilter, openTask, refreshToken = 0 }
                         <Typography color="text.secondary">{label}</Typography>
                         <Typography variant="h4">{data.counts[key] || 0}</Typography>
                       </Box>
-                      <Avatar sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', fontWeight: 800 }}>{label[0]}</Avatar>
                     </Stack>
                   </CardContent>
                 </CardActionArea>
