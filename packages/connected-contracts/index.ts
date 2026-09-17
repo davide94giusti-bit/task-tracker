@@ -14,6 +14,12 @@ export const TaskStatus = z.enum([
 export const Priority = z.enum(["critical", "high", "medium", "low", "none"]);
 export const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const Uuid = z.string().uuid();
+export const MoneyAmount = z
+  .number()
+  .finite()
+  .nonnegative()
+  .max(999_999_999_999.99)
+  .nullable();
 
 export const ApiError = z.object({
   code: z.string(),
@@ -47,6 +53,7 @@ export const TaskWrite = z.object({
   dueTime: z.string().nullable().optional(),
   reminderAt: z.string().datetime({ offset: true }).nullable().optional(),
   recurrence: z.record(z.string(), z.unknown()).nullable().optional(),
+  costAmount: MoneyAmount.optional(),
   expectedVersion: z.number().int().positive().optional(),
   idempotencyKey: z.string().uuid().optional(),
 });
@@ -96,7 +103,16 @@ export const ChecklistWrite = z.object({
   completed: z.boolean().default(false),
   required: z.boolean().default(true),
   position: z.number().int().nonnegative().default(0),
+  costAmount: MoneyAmount.optional(),
 });
+export const CostQuery = z
+  .object({
+    year: z.number().int().min(2000).max(2200).optional(),
+    month: z.number().int().min(1).max(12).optional(),
+    compareYear: z.number().int().min(2000).max(2200).optional(),
+    projectId: Uuid.optional(),
+  })
+  .strict();
 export const RecordId = z.object({ id: Uuid }).strict();
 export const TaskAttachmentUpload = z.object({
   taskId: Uuid,
@@ -139,6 +155,7 @@ export const NotificationPreferences = z.object({
   timezone: z.string().min(1).max(100),
   quietStart: z.string(),
   quietEnd: z.string(),
+  currencyCode: z.string().regex(/^[A-Z]{3}$/).default("CHF"),
 });
 
 export const InviteStatus = z.enum([

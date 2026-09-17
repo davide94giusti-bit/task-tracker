@@ -1,9 +1,12 @@
 export type View='dashboard'|'today'|'tasks'|'upcoming'|'calendar'|'projects'|'people'|'dependencies'|'completed'|'trash'|'settings'|'access'|'security'|'backup'|'diagnostics';
-export type Task={id:string;title:string;description:string;status:string;priority:string;dueDate?:string|null;dueTime?:string|null;projectId?:string|null;projectName?:string;responsiblePersonId?:string|null;responsiblePersonName?:string;calculatedProgress:number;checklistCompleted?:number;checklistTotal?:number;blocked:boolean;version:number;updatedAt:string};
+export type Task={id:string;title:string;description:string;status:string;priority:string;dueDate?:string|null;dueTime?:string|null;completedAt?:string|null;costAmount?:number|null;projectId?:string|null;projectName?:string;responsiblePersonId?:string|null;responsiblePersonName?:string;calculatedProgress:number;checklistCompleted?:number;checklistTotal?:number;blocked:boolean;version:number;updatedAt:string};
 export type Project={id:string;name:string;color:string;description:string;progress:number;activeTasks:number};
 export type Person={id:string;fullName:string;role:string;company:string;phone?:string;email?:string;address?:string;website?:string;preferredContact?:string;notes?:string;tags?:string[];progress:number;activeTasks:number};
 export type Dashboard={counts:Record<string,number>;overallProgress:number;projectProgress:Project[];peopleProgress:Person[];workload:Array<{date:string;count:number}>};
-export type ChecklistItem={id?:string;taskId?:string;description:string;completed:boolean;required:boolean;position?:number};
+export type ChecklistItem={id?:string;taskId?:string;description:string;completed:boolean;required:boolean;position?:number;costAmount?:number|null};
 export type TaskDependency={id:string;waitingTaskId:string;prerequisiteTaskId:string;mandatory:boolean;prerequisiteTitle:string;prerequisiteStatus:string;prerequisiteTask?:Task};
 export type NotificationItem={id:string;taskId?:string|null;kind:string;status:string;createdAt:string;deliveredAt?:string|null;readAt?:string|null};
 export type TaskAttachment={id:string;taskId:string;displayName:string;storagePath:string;mimeType:string;sizeBytes:number;createdAt:string};
+export type CostEntry={taskId:string;title:string;projectId:string|null;projectName:string;taskCost:number;checklistCost:number;totalCost:number;timing:'past'|'future';date:string|null;completedAt?:string|null;dueDate?:string|null};
+export type CostTotals={past:number;future:number;total:number};
+export type CostSummary={currencyCode:string;selectedYear:number|null;compareYear:number|null;availableYears:number[];totals:CostTotals;allTime:CostTotals;monthly:Array<{month:number;past:number;future:number;total:number;compareTotal?:number}>;projects:Array<{projectId:string|null;projectName:string;past:number;future:number;total:number}>;entries:CostEntry[];comparisonEntries:CostEntry[]};

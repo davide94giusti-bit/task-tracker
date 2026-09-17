@@ -221,8 +221,8 @@ return <>
 </Dialog>
 </>; }
 function applicationServerKey(value: string) { const padding = '='.repeat((4 - value.length % 4) % 4), raw = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, character => character.charCodeAt(0)); }
-type NotificationPreferences={emailEnabled:boolean;pushEnabled:boolean;reminder:boolean;dueToday:boolean;overdue:boolean;dailySummary:boolean;timezone:string;quietStart:string;quietEnd:string};
-const defaultPreferences:NotificationPreferences={emailEnabled:false,pushEnabled:false,reminder:true,dueToday:true,overdue:true,dailySummary:false,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',quietStart:'22:00',quietEnd:'07:00'};
+type NotificationPreferences={emailEnabled:boolean;pushEnabled:boolean;reminder:boolean;dueToday:boolean;overdue:boolean;dailySummary:boolean;timezone:string;quietStart:string;quietEnd:string;currencyCode:string};
+const defaultPreferences:NotificationPreferences={emailEnabled:false,pushEnabled:false,reminder:true,dueToday:true,overdue:true,dailySummary:false,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',quietStart:'22:00',quietEnd:'07:00',currencyCode:'CHF'};
 function SettingsView() { const [supported] = useState('serviceWorker' in navigator && 'PushManager' in window), [message, setMessage] = useState(''), [busy, setBusy] = useState(false), [preferences,setPreferences]=useState<NotificationPreferences>(defaultPreferences);
 useEffect(()=>{void api<NotificationPreferences|null>('/preferences').then(value=>value&&setPreferences({...defaultPreferences,...value})).catch(error=>setMessage(error.message))},[]);
 const savePreferences=async(next:NotificationPreferences)=>{setPreferences(next);await api('/preferences',{method:'POST',body:next})};
@@ -260,6 +260,15 @@ return <>
 <Button disabled={busy} onClick={async () => { setBusy(true); try { await api('/notifications/test-email', { method: 'POST', body: {} }); setMessage('Test email sent.'); } catch (error) { setMessage((error as Error).message); } finally { setBusy(false); } }}>Send test email</Button>
 </CardContent>
 </Card>
+<Card>
+<CardContent>
+<Typography variant="h6">Workspace currency</Typography>
+<Typography color="text.secondary" mb={2}>One currency is used consistently for task costs, project totals, and comparison charts. Changing it relabels existing amounts; it does not perform currency conversion.</Typography>
+<TextField select size="small" label="Currency" value={preferences.currencyCode} disabled={busy} onChange={async event=>{setBusy(true);try{await savePreferences({...preferences,currencyCode:event.target.value});setMessage(`Workspace currency changed to ${event.target.value}.`)}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}} sx={{minWidth:180}}>
+{['CHF','EUR','USD','GBP'].map(code=><MenuItem key={code} value={code}>{code}</MenuItem>)}
+</TextField>
+</CardContent>
+</Card>
 </Stack>
 <Snackbar open={!!message} autoHideDuration={5000} message={message} onClose={() => setMessage('')}/>
 </>; }
@@ -285,7 +294,7 @@ const theme = useMemo(() => createTheme({ palette: { mode: dark ? 'dark' : 'ligh
 const releaseFocus = () => (document.activeElement as HTMLElement | null)?.blur();
 const openTask = (nextTask: Task) => { releaseFocus(); setTask(nextTask); };
 const openNewTask = (date = '') => { releaseFocus(); setNewDate(date); };
-const body = filter ? <EnhancedTasksView view="tasks" query={filter.q} title={filter.title} onOpen={openTask} onNew={() => openNewTask()} refreshToken={refreshToken}/> : view === 'dashboard' ? <EnhancedDashboardView openFilter={(title, q) => setFilter({ title, q })}/> : ['tasks', 'today', 'upcoming', 'completed', 'trash'].includes(view) ? <EnhancedTasksView view={view} onOpen={openTask} onNew={() => openNewTask()} refreshToken={refreshToken}/> : view === 'projects' ? <ProjectsView onOpen={project => setFilter({ title: project.name, q: { projectId: project.id } })}/> : view === 'people' ? <PeopleView onOpen={person => setFilter({ title: person.fullName, q: { responsiblePersonId: person.id } })}/> : view === 'calendar' ? <CalendarView onOpen={openTask} onNew={openNewTask}/> : view === 'settings' ? <SettingsView /> : view==='access'?(platformAdmin?<UsersAccessView/>:<Alert severity="info">Only the platform administrator can invite and manage application users.</Alert>):view==='security'?<AccountSecurity/>:view==='backup'?<BackupImportView/>:view==='diagnostics'?<DiagnosticsView/>:<Generic view={view}/>;
+const body = filter ? <EnhancedTasksView view="tasks" query={filter.q} title={filter.title} onOpen={openTask} onNew={() => openNewTask()} refreshToken={refreshToken}/> : view === 'dashboard' ? <EnhancedDashboardView openFilter={(title, q) => setFilter({ title, q })} openTask={openTask} refreshToken={refreshToken}/> : ['tasks', 'today', 'upcoming', 'completed', 'trash'].includes(view) ? <EnhancedTasksView view={view} onOpen={openTask} onNew={() => openNewTask()} refreshToken={refreshToken}/> : view === 'projects' ? <ProjectsView onOpen={project => setFilter({ title: project.name, q: { projectId: project.id } })}/> : view === 'people' ? <PeopleView onOpen={person => setFilter({ title: person.fullName, q: { responsiblePersonId: person.id } })}/> : view === 'calendar' ? <CalendarView onOpen={openTask} onNew={openNewTask}/> : view === 'settings' ? <SettingsView /> : view==='access'?(platformAdmin?<UsersAccessView/>:<Alert severity="info">Only the platform administrator can invite and manage application users.</Alert>):view==='security'?<AccountSecurity/>:view==='backup'?<BackupImportView/>:view==='diagnostics'?<DiagnosticsView/>:<Generic view={view}/>;
 const navigate = (v: View) => { releaseFocus(); setFilter(null); setView(v); setDrawer(false); history.replaceState(null, '', `?view=${v}`); };
 return <ThemeProvider theme={theme}><CssBaseline/>
 <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary', pb: mobile ? 'calc(76px + env(safe-area-inset-bottom))' : 0 }}>
@@ -327,7 +336,7 @@ return <ThemeProvider theme={theme}><CssBaseline/>
 </ListItemButton>)}</List>
 </Box>
 </Drawer>
-<TaskDetailsDialog task={task} open={!!task} mobile={mobile} refreshToken={refreshToken} onClose={() => setTask(null)} onEdit={nextTask => { releaseFocus(); setEditingTask(nextTask); }}/>
+<TaskDetailsDialog task={task} open={!!task} mobile={mobile} refreshToken={refreshToken} onClose={() => setTask(null)} onEdit={nextTask => { releaseFocus(); setEditingTask(nextTask); }} onCompleted={() => setRefreshToken(value => value + 1)}/>
 <TaskEditorDialog task={editingTask} newDate={newDate} open={!!editingTask || newDate !== null} mobile={mobile} onClose={() => { setEditingTask(null); setNewDate(null); }} onSaved={() => { setEditingTask(null); setNewDate(null); setRefreshToken(value => value + 1); }}/>
 </Box>
 </ThemeProvider>; }

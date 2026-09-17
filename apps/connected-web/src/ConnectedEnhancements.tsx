@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Avatar, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
-import { Add, ArrowBack, AttachFile, Call, Close, Delete, Edit, Email, Link as LinkIcon, NotificationsActive, OpenInNew, Person as PersonIcon, Refresh, TableRows, ViewModule, WhatsApp } from '@mui/icons-material';
+import { Add, ArrowBack, AttachFile, Call, CheckCircle, Close, Delete, Edit, Email, Link as LinkIcon, NotificationsActive, OpenInNew, Person as PersonIcon, Refresh, TableRows, ViewModule, WhatsApp } from '@mui/icons-material';
 import { api } from './api';
-import type { ChecklistItem, Dashboard, NotificationItem, Person, Project, Task, TaskAttachment, TaskDependency, View } from './types';
+import type { ChecklistItem, CostEntry, CostSummary, Dashboard, NotificationItem, Person, Project, Task, TaskAttachment, TaskDependency, View } from './types';
 
 function titleFor(view: View, override?: string) {
   if (override) return override;
@@ -354,7 +354,100 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
   );
 }
 
-export function EnhancedDashboardView({ openFilter }: { openFilter: (title: string, query: Record<string, unknown>) => void }) {
+function CostAnalyticsCard({ onOpenTask, refreshToken = 0 }: { onOpenTask: (task: Task) => void; refreshToken?: number }) {
+  const currentYear = new Date().getFullYear(),
+    [year, setYear] = useState(String(currentYear)),
+    [month, setMonth] = useState(''),
+    [compareYear, setCompareYear] = useState(''),
+    [data, setData] = useState<CostSummary | null>(null),
+    [error, setError] = useState(''),
+    [drilldown, setDrilldown] = useState<{ title: string; entries: CostEntry[] } | null>(null);
+  const load = useCallback(() => {
+    const query = new URLSearchParams();
+    if (year !== 'all') query.set('year', year);
+    if (month && year !== 'all') query.set('month', month);
+    if (compareYear && year !== 'all') query.set('compareYear', compareYear);
+    setError('');
+    return api<CostSummary>(`/costs?${query}`)
+      .then(setData)
+      .catch((reason) => setError(reason.message));
+  }, [year, month, compareYear, refreshToken]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const years = Array.from(new Set([currentYear, ...(data?.availableYears || [])])).sort((a, b) => b - a),
+    comparisonYears = (data?.availableYears || []).filter((value) => String(value) !== year),
+    money = (value: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: data?.currencyCode || 'CHF', maximumFractionDigits: 2 }).format(value),
+    monthLabel = (value: number) => new Date(2020, value - 1, 1).toLocaleDateString(undefined, { month: 'short' }),
+    graphMaximum = Math.max(1, ...(data?.monthly.flatMap((item) => [item.total, item.compareTotal || 0]) || [0]));
+  useEffect(() => {
+    if (compareYear && !comparisonYears.includes(Number(compareYear))) setCompareYear('');
+  }, [year, data?.availableYears.join(','), compareYear]);
+  const openEntries = (title: string, predicate: (entry: CostEntry) => boolean = () => true) => {
+    setDrilldown({ title, entries: (data?.entries || []).filter(predicate) });
+  };
+  const openTask = async (entry: CostEntry) => {
+    try {
+      const details = await api<TaskDetailsPayload>(`/tasks/details?taskId=${encodeURIComponent(entry.taskId)}`);
+      setDrilldown(null);
+      onOpenTask(details.task);
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  };
+  return (
+    <>
+      <Card sx={{ mt: 2 }}>
+        <CardContent>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} mb={2}>
+            <Box><Typography variant="h6">Total cost</Typography><Typography color="text.secondary">Past and future task costs, including checklist items.</Typography></Box>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField select size="small" label="Period" value={year} onChange={(event) => { setYear(event.target.value); setMonth(''); }} sx={{ minWidth: 130 }}>
+                <MenuItem value="all">All time</MenuItem>
+                {years.map((value) => <MenuItem key={value} value={String(value)}>{value}</MenuItem>)}
+              </TextField>
+              <TextField select size="small" label="Month" value={month} disabled={year === 'all'} onChange={(event) => { setMonth(event.target.value); if (event.target.value) setCompareYear(''); }} sx={{ minWidth: 140 }}>
+                <MenuItem value="">All months</MenuItem>
+                {Array.from({ length: 12 }, (_, index) => index + 1).map((value) => <MenuItem key={value} value={String(value)}>{new Date(2020, value - 1, 1).toLocaleDateString(undefined, { month: 'long' })}</MenuItem>)}
+              </TextField>
+              {year !== 'all' && !month && comparisonYears.length > 0 && <TextField select size="small" label="Compare with" value={compareYear} onChange={(event) => setCompareYear(event.target.value)} sx={{ minWidth: 145 }}><MenuItem value="">No comparison</MenuItem>{comparisonYears.map((value) => <MenuItem key={value} value={String(value)}>{value}</MenuItem>)}</TextField>}
+            </Stack>
+          </Stack>
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {!data ? <LinearProgress /> : <>
+            <Box className="metric-grid">
+              {[['Past / incurred', data.totals.past, 'past'], ['Future / planned', data.totals.future, 'future'], ['Total', data.totals.total, 'all']].map(([label, value, timing]) => <Card key={String(label)} variant="outlined"><CardActionArea onClick={() => openEntries(String(label), (entry) => timing === 'all' || entry.timing === timing)}><CardContent><Typography color="text.secondary">{label}</Typography><Typography variant="h5">{money(Number(value))}</Typography></CardContent></CardActionArea></Card>)}
+            </Box>
+            {year !== 'all' && !month && <Box sx={{ mt: 3, overflowX: 'auto', pb: 1 }}>
+              <Stack direction="row" spacing={1} alignItems="flex-end" sx={{ minWidth: 720, height: 220 }}>
+                {data.monthly.map((item) => <Box component="button" type="button" key={item.month} onClick={() => openEntries(`${monthLabel(item.month)} ${year}`, (entry) => !!entry.date && Number(entry.date.slice(5, 7)) === item.month)} sx={{ border: 0, bgcolor: 'transparent', color: 'inherit', cursor: 'pointer', flex: 1, height: '100%', p: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                  <Stack direction="row" spacing={0.4} alignItems="flex-end" justifyContent="center" flex={1} width="100%">
+                    <Box title={`${year}: ${money(item.total)}`} sx={{ width: compareYear ? '34%' : '55%', minHeight: item.total ? 4 : 0, height: `${item.total / graphMaximum * 100}%`, maxHeight: '170px', bgcolor: 'primary.main', borderRadius: '5px 5px 0 0' }} />
+                    {item.compareTotal !== undefined && <Box title={`${compareYear}: ${money(item.compareTotal)}`} onClick={(event) => { event.stopPropagation(); setDrilldown({ title: `${monthLabel(item.month)} ${compareYear}`, entries: data.comparisonEntries.filter((entry) => !!entry.date && Number(entry.date.slice(5, 7)) === item.month) }); }} sx={{ width: '34%', minHeight: item.compareTotal ? 4 : 0, height: `${item.compareTotal / graphMaximum * 100}%`, maxHeight: '170px', bgcolor: 'secondary.main', borderRadius: '5px 5px 0 0' }} />}
+                  </Stack>
+                  <Typography variant="caption" textAlign="center" mt={0.5}>{monthLabel(item.month)}</Typography>
+                </Box>)}
+              </Stack>
+              <Stack direction="row" spacing={2} mt={1}><Typography variant="caption"><Box component="span" sx={{ display: 'inline-block', width: 10, height: 10, bgcolor: 'primary.main', mr: 0.5 }} />{year}</Typography>{data.compareYear && <Typography variant="caption"><Box component="span" sx={{ display: 'inline-block', width: 10, height: 10, bgcolor: 'secondary.main', mr: 0.5 }} />{data.compareYear}</Typography>}</Stack>
+            </Box>}
+            <Typography variant="h6" mt={3} mb={1}>Cost by project</Typography>
+            <Stack spacing={1}>
+              {data.projects.map((project) => <Card key={project.projectId || 'none'} variant="outlined"><CardActionArea onClick={() => openEntries(project.projectName, (entry) => entry.projectId === project.projectId)}><CardContent><Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1}><Box><Typography fontWeight={700}>{project.projectName}</Typography><Typography variant="body2" color="text.secondary">Past {money(project.past)} · Future {money(project.future)}</Typography></Box><Typography variant="h6">{money(project.total)}</Typography></Stack></CardContent></CardActionArea></Card>)}
+              {!data.projects.length && <Typography color="text.secondary">No costs exist for this period.</Typography>}
+            </Stack>
+          </>}
+        </CardContent>
+      </Card>
+      <Dialog open={!!drilldown} onClose={() => setDrilldown(null)} fullWidth maxWidth="md">
+        <DialogTitle>{drilldown?.title} cost details</DialogTitle>
+        <DialogContent><Stack spacing={1} mt={1}>{drilldown?.entries.map((entry) => <Card key={entry.taskId} variant="outlined"><CardActionArea onClick={() => void openTask(entry)}><CardContent><Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1}><Box><Typography fontWeight={700}>{entry.title}</Typography><Typography variant="body2" color="text.secondary">{entry.projectName} · {entry.timing} · {entry.date ? new Date(`${entry.date.slice(0, 10)}T12:00:00`).toLocaleDateString() : 'No cost date'}</Typography><Typography variant="caption">Task {money(entry.taskCost)} + checklist {money(entry.checklistCost)}</Typography></Box><Typography variant="h6">{money(entry.totalCost)}</Typography></Stack></CardContent></CardActionArea></Card>)}{drilldown && !drilldown.entries.length && <Typography color="text.secondary">No costs match this selection.</Typography>}</Stack></DialogContent>
+        <DialogActions><Button onClick={() => setDrilldown(null)}>Close</Button></DialogActions>
+      </Dialog>
+    </>
+  );
+}
+
+export function EnhancedDashboardView({ openFilter, openTask, refreshToken = 0 }: { openFilter: (title: string, query: Record<string, unknown>) => void; openTask: (task: Task) => void; refreshToken?: number }) {
   const [data, setData] = useState<Dashboard | null>(null),
     [projects, setProjects] = useState<Project[]>([]),
     [error, setError] = useState('');
@@ -365,7 +458,7 @@ export function EnhancedDashboardView({ openFilter }: { openFilter: (title: stri
         setProjects(projectRows);
       })
       .catch((reason) => setError(reason.message));
-  }, []);
+  }, [refreshToken]);
   const cards = [
     ['Overdue', 'overdue', { due: 'overdue' }],
     ['Due today', 'today', { due: 'today' }],
@@ -458,6 +551,7 @@ export function EnhancedDashboardView({ openFilter }: { openFilter: (title: stri
               </Stack>
             </CardContent>
           </Card>
+          <CostAnalyticsCard onOpenTask={openTask} refreshToken={refreshToken} />
         </>
       )}
     </>
@@ -607,15 +701,17 @@ type TaskDetailsPayload = {
   dependencies: TaskDependency[];
 };
 
-export function TaskDetailsDialog({ task, open, onClose, onEdit, mobile, refreshToken = 0 }: { task: Task | null; open: boolean; onClose: () => void; onEdit: (task: Task) => void; mobile: boolean; refreshToken?: number }) {
+export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, mobile, refreshToken = 0 }: { task: Task | null; open: boolean; onClose: () => void; onEdit: (task: Task) => void; onCompleted: () => void; mobile: boolean; refreshToken?: number }) {
   const [history, setHistory] = useState<Task[]>([]),
     [details, setDetails] = useState<TaskDetailsPayload | null>(null),
     [attachments, setAttachments] = useState<TaskAttachment[]>([]),
     [projects, setProjects] = useState<Project[]>([]),
+    [currencyCode, setCurrencyCode] = useState('CHF'),
     [responsiblePerson, setResponsiblePerson] = useState<Person | null>(null),
     [contactOpen, setContactOpen] = useState(false),
     [error, setError] = useState(''),
-    [loading, setLoading] = useState(false);
+    [loading, setLoading] = useState(false),
+    [completing, setCompleting] = useState(false);
   const contentRef = useRef<HTMLDivElement | null>(null),
     scrollPositions = useRef<Record<string, number>>({});
   const current = history[history.length - 1] || task;
@@ -637,14 +733,16 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, mobile, refresh
     Promise.all([
       api<TaskDetailsPayload>(`/tasks/details?taskId=${encodeURIComponent(current.id)}`),
       api<TaskAttachment[]>(`/tasks/attachments?taskId=${encodeURIComponent(current.id)}`),
-      api<Project[]>('/projects')
+      api<Project[]>('/projects'),
+      api<{ currencyCode?: string } | null>('/preferences')
     ])
-      .then(([nextDetails, nextAttachments, projectRows]) => {
+      .then(([nextDetails, nextAttachments, projectRows, preferences]) => {
         if (!active) return;
         const mergedTask = { ...current, ...nextDetails.task };
         setDetails({ ...nextDetails, task: mergedTask });
         setAttachments(nextAttachments);
         setProjects(projectRows);
+        setCurrencyCode(preferences?.currencyCode || 'CHF');
         setHistory((value) => value.map((entry, index) => (index === value.length - 1 ? mergedTask : entry)));
         setResponsiblePerson(null);
         if (mergedTask.responsiblePersonId)
@@ -685,6 +783,38 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, mobile, refresh
   const shownTask = details?.task || current;
   const projectName = shownTask?.projectName || projects.find((project) => project.id === shownTask?.projectId)?.name;
   const completedChecklist = details?.checklist.filter((item) => item.completed).length || 0;
+  const taskCost = shownTask?.costAmount ?? null,
+    checklistCost = details?.checklist.reduce((sum, item) => sum + (item.costAmount || 0), 0) || 0,
+    hasCost = taskCost !== null || !!details?.checklist.some((item) => item.costAmount !== null && item.costAmount !== undefined),
+    totalCost = (taskCost || 0) + checklistCost,
+    money = (value: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: currencyCode }).format(value);
+  const completeTask = async () => {
+    if (!shownTask) return;
+    setCompleting(true);
+    setError('');
+    try {
+      await api('/tasks/save', {
+        method: 'POST',
+        body: {
+          id: shownTask.id,
+          title: shownTask.title,
+          description: shownTask.description || '',
+          status: 'completed',
+          priority: shownTask.priority,
+          dueDate: shownTask.dueDate || null,
+          projectId: shownTask.projectId || null,
+          responsiblePersonId: shownTask.responsiblePersonId || null,
+          costAmount: shownTask.costAmount ?? null,
+          expectedVersion: shownTask.version
+        }
+      });
+      onCompleted();
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setCompleting(false);
+    }
+  };
   return (
     <>
       <Dialog open={open} onClose={onClose} fullScreen={mobile} fullWidth maxWidth="md" slotProps={{ paper: { sx: mobile ? { height: '100dvh', maxHeight: '100dvh' } : undefined } }}>
@@ -717,9 +847,16 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, mobile, refresh
                 </Button>
               )}
               <Paper variant="outlined" sx={{ p: 2 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center"><Typography variant="h6">Cost breakdown</Typography><Typography variant="h6">{hasCost ? money(totalCost) : 'N/A'}</Typography></Stack>
+                <Stack spacing={0.75} mt={1}>
+                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">Task cost</Typography><Typography>{taskCost === null ? 'N/A' : money(taskCost)}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">Checklist items</Typography><Typography>{details?.checklist.some((item) => item.costAmount !== null && item.costAmount !== undefined) ? money(checklistCost) : 'N/A'}</Typography></Stack>
+                </Stack>
+              </Paper>
+              <Paper variant="outlined" sx={{ p: 2 }}>
                 <Stack direction="row" justifyContent="space-between"><Typography variant="h6">Checklist</Typography><Typography color="text.secondary">{completedChecklist}/{details?.checklist.length || 0}</Typography></Stack>
                 <Stack spacing={1} mt={1}>
-                  {details?.checklist.map((item) => <Stack key={item.id || item.description} direction="row" spacing={1} alignItems="center"><Checkbox checked={item.completed} disabled /><Typography sx={{ textDecoration: item.completed ? 'line-through' : 'none' }}>{item.description}</Typography>{item.required && <Chip size="small" label="Required" />}</Stack>)}
+                  {details?.checklist.map((item) => <Stack key={item.id || item.description} direction="row" spacing={1} alignItems="center"><Checkbox checked={item.completed} disabled /><Typography flex={1} sx={{ textDecoration: item.completed ? 'line-through' : 'none' }}>{item.description}</Typography>{item.costAmount !== null && item.costAmount !== undefined && <Chip size="small" label={money(item.costAmount)} />}{item.required && <Chip size="small" label="Required" />}</Stack>)}
                   {!details?.checklist.length && <Typography color="text.secondary">No checklist items.</Typography>}
                 </Stack>
               </Paper>
@@ -748,6 +885,7 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, mobile, refresh
         </DialogContent>
         <DialogActions sx={mobile ? { position: 'sticky', bottom: 0, zIndex: 3, flexShrink: 0, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper', px: 2, pt: 1.25, pb: 'calc(20px + env(safe-area-inset-bottom))', boxShadow: '0 -8px 20px rgba(0,0,0,.18)', '& .MuiButton-root': { minHeight: 44 } } : undefined}>
           <Button startIcon={<ArrowBack />} onClick={goBack}>{history.length > 1 ? 'Previous task' : 'Back to tasks'}</Button>
+          {shownTask?.status !== 'completed' && <Button color="success" variant="outlined" startIcon={completing ? <CircularProgress size={18} /> : <CheckCircle />} disabled={completing} onClick={() => void completeTask()}>Complete task</Button>}
           <Button variant="contained" startIcon={<Edit />} disabled={!shownTask} onClick={() => shownTask && onEdit(shownTask)}>Edit task</Button>
         </DialogActions>
       </Dialog>
@@ -764,7 +902,8 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
     priority: 'medium',
     dueDate: '',
     projectId: '',
-    responsiblePersonId: ''
+    responsiblePersonId: '',
+    costAmount: ''
   });
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]),
     [dependencies, setDependencies] = useState<TaskDependency[]>([]),
@@ -773,6 +912,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
   const [projects, setProjects] = useState<Project[]>([]),
     [people, setPeople] = useState<Person[]>([]),
     [tasks, setTasks] = useState<Task[]>([]),
+    [currencyCode, setCurrencyCode] = useState('CHF'),
     [checklistText, setChecklistText] = useState(''),
     [prerequisiteId, setPrerequisiteId] = useState('');
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]),
@@ -791,7 +931,8 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
       priority: task?.priority || 'medium',
       dueDate: newDate || task?.dueDate || '',
       projectId: task?.projectId || '',
-      responsiblePersonId: task?.responsiblePersonId || ''
+      responsiblePersonId: task?.responsiblePersonId || '',
+      costAmount: task?.costAmount === null || task?.costAmount === undefined ? '' : String(task.costAmount)
     });
     setChecklist([]);
     setDependencies([]);
@@ -803,10 +944,11 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
     setLinkLabel('');
     setLinkUrl('');
     setError('');
-    Promise.all([api<Project[]>('/projects'), api<Person[]>('/people'), api<{ items: Task[] }>('/tasks?view=all&pageSize=100')]).then(([projectRows, peopleRows, taskRows]) => {
+    Promise.all([api<Project[]>('/projects'), api<Person[]>('/people'), api<{ items: Task[] }>('/tasks?view=all&pageSize=100'), api<{ currencyCode?: string } | null>('/preferences')]).then(([projectRows, peopleRows, taskRows, preferences]) => {
       setProjects(projectRows);
       setPeople(peopleRows);
       setTasks(taskRows.items);
+      setCurrencyCode(preferences?.currencyCode || 'CHF');
     });
     if (task)
       api<{
@@ -847,7 +989,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
   const addChecklist = () => {
     const description = checklistText.trim();
     if (!description) return;
-    setChecklist((value) => [...value, { description, completed: false, required: true, position: value.length }]);
+    setChecklist((value) => [...value, { description, completed: false, required: true, position: value.length, costAmount: null }]);
     setChecklistText('');
   };
   const addDependency = () => {
@@ -970,7 +1112,8 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
         priority: editor.priority,
         dueDate: editor.dueDate || null,
         projectId: editor.projectId || null,
-        responsiblePersonId: editor.responsiblePersonId || null
+        responsiblePersonId: editor.responsiblePersonId || null,
+        costAmount: editor.costAmount === '' ? null : Number(editor.costAmount.replace(',', '.'))
       };
       let taskId = task?.id;
       if (!taskId) {
@@ -1098,6 +1241,15 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
             </TextField>
           </Stack>
           <TextField label="Due date" type="date" value={editor.dueDate} onChange={(event) => setEditor((value) => ({ ...value, dueDate: event.target.value }))} slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField
+            label={`Task cost (${currencyCode})`}
+            type="number"
+            value={editor.costAmount}
+            placeholder="N/A"
+            helperText="Leave empty when no task-level cost applies. Checklist costs are added separately."
+            onChange={(event) => setEditor((value) => ({ ...value, costAmount: event.target.value }))}
+            slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
+          />
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Typography variant="h6">Checklist</Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} my={1}>
@@ -1120,7 +1272,8 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
             </Stack>
             <Stack spacing={0.5}>
               {checklist.map((item, index) => (
-                <Stack key={item.id || index} direction="row" alignItems="center">
+                <Stack key={item.id || index} direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} spacing={1}>
+                  <Stack direction="row" alignItems="center" flex={1}>
                   <Checkbox checked={item.completed} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, completed: event.target.checked } : entry)))} />
                   <Typography
                     sx={{
@@ -1130,6 +1283,8 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
                   >
                     {item.description}
                   </Typography>
+                  </Stack>
+                  <TextField size="small" type="number" label={`Cost (${currencyCode})`} placeholder="N/A" value={item.costAmount ?? ''} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, costAmount: event.target.value === '' ? null : Number(event.target.value) } : entry)))} slotProps={{ htmlInput: { min: 0, step: 0.01 } }} sx={{ width: { xs: '100%', sm: 150 } }} />
                   <FormControlLabel control={<Checkbox size="small" checked={item.required} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, required: event.target.checked } : entry)))} />} label="Required" />
                   <IconButton
                     aria-label="Delete checklist item"

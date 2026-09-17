@@ -1,6 +1,7 @@
 import {
   CalendarQuery,
   ChecklistWrite,
+  CostQuery,
   ProjectWrite,
   RecordId,
   TaskAttachmentLink,
@@ -9,6 +10,7 @@ import {
   TaskWrite,
   Uuid,
 } from "../../packages/connected-contracts";
+import { buildCostSummary } from "./costs";
 import {
   authContext,
   body,
@@ -21,6 +23,22 @@ import {
 import type { BaseEnv, Fetcher, WorkerHandler } from "../_shared/types";
 interface Env extends BaseEnv {
   DATA: Fetcher;
+}
+async function allRows(
+  env: Env,
+  context: ReturnType<typeof authContext>,
+  table: string,
+  filters: Record<string, unknown>,
+) {
+  const result: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const rows = (await call(env.DATA, "/select", env, context, {
+      method: "POST",
+      body: JSON.stringify({ table, filters, limit: 500, offset }),
+    })) as any[];
+    result.push(...rows);
+    if (rows.length < 500) return result;
+  }
 }
 export default <WorkerHandler<Env>>{
   async fetch(request, env) {
@@ -53,6 +71,36 @@ export default <WorkerHandler<Env>>{
           await call(env.DATA, "/tasks/save", env, context, {
             method: "POST",
             body: JSON.stringify(input),
+          }),
+          200,
+          requestId,
+        );
+      }
+      if (url.pathname === "/costs") {
+        const raw = Object.fromEntries(url.searchParams),
+          query = CostQuery.parse({
+            year: raw.year ? Number(raw.year) : undefined,
+            month: raw.month ? Number(raw.month) : undefined,
+            compareYear: raw.compareYear
+              ? Number(raw.compareYear)
+              : undefined,
+            projectId: raw.projectId || undefined,
+          });
+        const [tasks, checklist, projects, preferences] = await Promise.all([
+          allRows(env, context, "tasks", { deleted_at: null }),
+          allRows(env, context, "checklist_items", { deleted_at: null }),
+          allRows(env, context, "projects", { deleted_at: null }),
+          allRows(env, context, "notification_preferences", {
+            user_id: context.userId,
+          }),
+        ]);
+        return json(
+          buildCostSummary({
+            tasks,
+            checklist,
+            projects,
+            currencyCode: preferences[0]?.currencyCode || "CHF",
+            ...query,
           }),
           200,
           requestId,
@@ -138,6 +186,7 @@ export default <WorkerHandler<Env>>{
                 completed: input.completed,
                 required: input.required,
                 position: input.position,
+                cost_amount: input.costAmount,
                 updated_by: context.userId,
                 ...(!input.id ? { created_by: context.userId } : {}),
               },

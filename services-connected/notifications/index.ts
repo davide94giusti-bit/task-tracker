@@ -87,6 +87,7 @@ export default <WorkerHandler<Env>>{
           timezone: input.timezone,
           quiet_start: input.quietStart,
           quiet_end: input.quietEnd,
+          currency_code: input.currencyCode,
         };
         return json(await call(env.DATA, "/write", env, context, { method: "POST", body: JSON.stringify({ table: "notification_preferences", method: existing[0] ? "patch" : "post", id: existing[0]?.id, row }) }), 200, requestId);
       }
