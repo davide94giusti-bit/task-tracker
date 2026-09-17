@@ -9,7 +9,7 @@ describe('person master links and dependency drilldowns', () => {
     const enhancements = read('apps/connected-web/src/ConnectedEnhancements.tsx');
     expect(app).not.toContain('{label[0]}</Avatar>');
     expect(enhancements).not.toContain('{label[0]}</Avatar>');
-    expect(enhancements).toContain('justifyContent="center" sx={{ mt: { xs: 1, md: 0 }, ml: { md: \'auto\' } }}');
+    expect(enhancements).toContain('justifyContent="center" mt={1}');
   });
 
   it('drills dependency cards into matching task sets', () => {

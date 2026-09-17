@@ -139,8 +139,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
         </Button>
       </Stack>
       <Paper variant="outlined" sx={{ p: 1.25, mb: 2 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }} justifyContent="space-between">
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
           <TextField
             select
             size="small"
@@ -201,24 +200,6 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
             <MenuItem value="priority">Priority</MenuItem>
             <MenuItem value="updated">Recently updated</MenuItem>
           </TextField>
-          </Stack>
-          <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" sx={{ mt: { xs: 1, md: 0 }, ml: { md: 'auto' } }}>
-            <ToggleButtonGroup exclusive size="small" value={layout} onChange={(_, value) => value && setLayout(value)} aria-label="Task layout">
-              <ToggleButton value="table" aria-label="Table view">
-                <TableRows sx={{ mr: 0.5 }} />
-                Table
-              </ToggleButton>
-              <ToggleButton value="cards" aria-label="Card view">
-                <ViewModule sx={{ mr: 0.5 }} />
-                Cards
-              </ToggleButton>
-            </ToggleButtonGroup>
-            <Tooltip title="Refresh tasks">
-              <IconButton aria-label="Refresh tasks" onClick={load}>
-                <Refresh />
-              </IconButton>
-            </Tooltip>
-          </Stack>
         </Stack>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} mt={1}>
           <TextField size="small" label="Search" value={filters.search} onChange={(event) => setFilters((value) => ({ ...value, search: event.target.value }))} />
@@ -250,6 +231,23 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
               </MenuItem>
             ))}
           </TextField>
+        </Stack>
+        <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" mt={1}>
+          <ToggleButtonGroup exclusive size="small" value={layout} onChange={(_, value) => value && setLayout(value)} aria-label="Task layout">
+            <ToggleButton value="table" aria-label="Table view">
+              <TableRows sx={{ mr: 0.5 }} />
+              Table
+            </ToggleButton>
+            <ToggleButton value="cards" aria-label="Card view">
+              <ViewModule sx={{ mr: 0.5 }} />
+              Cards
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <Tooltip title="Refresh tasks">
+            <IconButton aria-label="Refresh tasks" onClick={load}>
+              <Refresh />
+            </IconButton>
+          </Tooltip>
         </Stack>
       </Paper>
       {error && (
