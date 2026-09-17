@@ -13,6 +13,8 @@ describe('v16 usability and reliability', () => {
     expect(app).toContain('Master link copied to the clipboard.');
     expect(app).toContain('previous link no longer works');
     expect(app).toContain('variant="outlined" color="error"');
+    expect(app).toContain('Message preview');
+    expect(app).toContain("'& > :not(style) ~ :not(style)': { ml: 0 }");
   });
 
   it('keeps task creation alive through cold connected writes', () => {
