@@ -1,42 +1,44 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, CssBaseline, LinearProgress, Stack, ThemeProvider, Typography, createTheme } from '@mui/material';
-import { Refresh, TaskAlt } from '@mui/icons-material';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, Collapse, CssBaseline, Divider, FormControlLabel, IconButton, LinearProgress, Paper, Stack, Switch, ThemeProvider, ToggleButton, ToggleButtonGroup, Typography, createTheme } from '@mui/material';
+import { CheckCircle, DarkMode, ExpandLess, ExpandMore, LightMode, NotificationsActive, Refresh, TaskAlt } from '@mui/icons-material';
 import { publicApi } from './api';
 
-type SharedTask = {
-  id: string;
-  title: string;
-  projectName?: string | null;
-  status: string;
-  priority: string;
-  dueDate?: string | null;
-  calculatedProgress: number;
-  blocked: boolean;
-};
-type SharedView = { personName: string; generatedAt: string; tasks: SharedTask[] };
-const label = (value: string) => value.replaceAll('_', ' ').replace(/^./, (character) => character.toUpperCase());
+type SharedChecklist = { id: string; description: string; completed: boolean; required: boolean; position: number };
+type SharedTask = { id: string; title: string; description?: string; status: string; priority: string; dueDate?: string | null; calculatedProgress: number; blocked: boolean; checklist: SharedChecklist[] };
+type SharedProject = { projectId?: string | null; projectName: string; progress: number; tasks: SharedTask[] };
+type SharedPreferences = { emailAvailable: boolean; emailEnabled: boolean; pushEnabled: boolean; activePushSubscriptions: number };
+type SharedView = { personName: string; generatedAt: string; preferences: SharedPreferences; projects: SharedProject[] };
+type ItemFilter = 'todo' | 'done' | 'all';
+const label = (value: string) => value.replaceAll('_', ' ').replace(/^./, character => character.toUpperCase());
+const applicationServerKey = (value: string) => { const padding = '='.repeat((4 - value.length % 4) % 4), raw = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, character => character.charCodeAt(0)); };
 
 export function PublicPersonTasks() {
   const token = new URLSearchParams(location.search).get('token') || '';
-  const [data, setData] = useState<SharedView | null>(null);
-  const [error, setError] = useState('');
-  const load = useCallback(async () => {
-    setError('');
-    try { setData(await publicApi<SharedView>(`/public/person-tasks?token=${encodeURIComponent(token)}`)); }
-    catch (reason) { setError((reason as Error).message); }
-  }, [token]);
+  const [data, setData] = useState<SharedView | null>(null), [error, setError] = useState(''), [message, setMessage] = useState(''), [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null), [filter, setFilter] = useState<ItemFilter>('todo');
+  const [dark, setDark] = useState(() => localStorage.getItem('shared-task-theme') === 'dark' || (!localStorage.getItem('shared-task-theme') && matchMedia('(prefers-color-scheme: dark)').matches));
+  const theme = useMemo(() => createTheme({ palette: { mode: dark ? 'dark' : 'light', primary: { main: dark ? '#60a5fa' : '#1d4ed8' }, background: { default: dark ? '#0c1220' : '#f4f7fb', paper: dark ? '#151d2e' : '#fff' } }, shape: { borderRadius: 14 }, typography: { fontFamily: 'Inter,Segoe UI,Arial,sans-serif', h4: { fontWeight: 800 }, h6: { fontWeight: 750 } } }), [dark]);
+  const load = useCallback(async () => { setError(''); try { setData(await publicApi<SharedView>(`/public/person-tasks?token=${encodeURIComponent(token)}`)); } catch (reason) { setError((reason as Error).message); } }, [token]);
   useEffect(() => { void load(); }, [load]);
-  const theme = createTheme({ palette: { primary: { main: '#1d4ed8' }, background: { default: '#f4f7fb' } }, shape: { borderRadius: 14 }, typography: { fontFamily: 'Inter,Segoe UI,Arial,sans-serif', h4: { fontWeight: 800 }, h6: { fontWeight: 750 } } });
-  return <ThemeProvider theme={theme}><CssBaseline/><Box sx={{ minHeight: '100vh', bgcolor: 'background.default', py: { xs: 2, sm: 5 }, px: 2 }}><Box sx={{ maxWidth: 760, mx: 'auto' }}>
-    <Stack direction="row" alignItems="center" spacing={1.25} mb={3}><TaskAlt color="primary"/><Box><Typography variant="h4">Active tasks</Typography><Typography color="text.secondary">{data?.personName || 'Shared task view'}</Typography></Box></Stack>
-    <Alert severity="info" sx={{ mb: 2 }} action={<Button startIcon={<Refresh/>} onClick={() => void load()}>Refresh</Button>}>This live link shows the current active tasks whenever it is opened or refreshed.</Alert>
-    {!data && !error && <LinearProgress/>}{error && <Alert severity="error" action={<Button onClick={() => void load()}>Retry</Button>}>{error}</Alert>}
-    {data && <><Typography color="text.secondary" mb={2}>{data.tasks.length} active task{data.tasks.length === 1 ? '' : 's'} · refreshed {new Date(data.generatedAt).toLocaleString()}</Typography>
-      {!data.tasks.length ? <Alert severity="success">No active tasks are currently assigned.</Alert> : <Stack spacing={1.25}>{data.tasks.map((task) => <Card key={task.id} variant="outlined"><CardContent>
-        <Stack direction="row" justifyContent="space-between" gap={2}><Box><Typography variant="h6">{task.title}</Typography><Typography color="text.secondary">{task.projectName || 'No project'}</Typography></Box><Stack direction="row" spacing={0.75} alignItems="flex-start" flexWrap="wrap" useFlexGap>{task.blocked && <Chip size="small" color="warning" label="Blocked"/>}<Chip size="small" variant="outlined" label={label(task.priority)}/></Stack></Stack>
-        <Stack direction="row" justifyContent="space-between" mt={2}><Typography variant="body2">{label(task.status)} · {task.dueDate ? `Due ${new Date(`${task.dueDate}T12:00:00`).toLocaleDateString()}` : 'No due date'}</Typography><Typography variant="body2" fontWeight={700}>{task.calculatedProgress || 0}%</Typography></Stack><LinearProgress variant="determinate" value={task.calculatedProgress || 0} sx={{ mt: 1, height: 7, borderRadius: 4 }}/>
-      </CardContent></Card>)}</Stack>}
-    </>}
-    <Typography variant="caption" color="text.secondary" display="block" textAlign="center" mt={4}>Read-only task view · No sign-in required</Typography>
+  const setTheme = (next: boolean) => { setDark(next); localStorage.setItem('shared-task-theme', next ? 'dark' : 'light'); };
+  const savePreferences = async (changes: Partial<Pick<SharedPreferences, 'emailEnabled' | 'pushEnabled'>>) => { setBusy(true); setError(''); try { await publicApi('/public/person-preferences', { method: 'POST', body: { token, ...changes } }); await load(); setMessage('Notification preferences updated.'); } catch (reason) { setError((reason as Error).message); } finally { setBusy(false); } };
+  const enablePush = async () => { setBusy(true); setError(''); try { if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('Browser notifications are not supported on this device.'); if (!import.meta.env.VITE_VAPID_PUBLIC_KEY) throw new Error('Browser notification configuration is unavailable.'); const permission = await Notification.requestPermission(); if (permission !== 'granted') throw new Error('Notification permission was not granted.'); const registration = await navigator.serviceWorker.ready, subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey(import.meta.env.VITE_VAPID_PUBLIC_KEY) as BufferSource }), json = subscription.toJSON(); await publicApi('/public/person-push-subscribe', { method: 'POST', body: { token, ...json, expirationTime: json.expirationTime ?? null, deviceLabel: navigator.userAgent.slice(0, 100) } }); await load(); setMessage('Browser notifications enabled on this device.'); } catch (reason) { setError((reason as Error).message); } finally { setBusy(false); } };
+  const taskCount = data?.projects.reduce((sum, project) => sum + project.tasks.length, 0) || 0;
+  return <ThemeProvider theme={theme}><CssBaseline/><Box sx={{ minHeight: '100vh', bgcolor: 'background.default', py: { xs: 2, sm: 5 }, px: 2 }}><Box sx={{ maxWidth: 780, mx: 'auto' }}>
+    <Stack direction="row" alignItems="center" spacing={1.25} mb={3}><TaskAlt color="primary"/><Box flex={1}><Typography variant="h4">Assigned work</Typography><Typography color="text.secondary">{data?.personName || 'Shared task portal'}</Typography></Box><IconButton aria-label="Use light mode" color={!dark ? 'primary' : 'default'} onClick={() => setTheme(false)}><LightMode/></IconButton><IconButton aria-label="Use dark mode" color={dark ? 'primary' : 'default'} onClick={() => setTheme(true)}><DarkMode/></IconButton></Stack>
+    <Alert severity="info" sx={{ mb: 2 }} action={<Button startIcon={<Refresh/>} onClick={() => void load()}>Refresh</Button>}>This is a live, read-only view. Open or refresh it to see the latest assigned work.</Alert>
+    {message && <Alert severity="success" onClose={() => setMessage('')} sx={{ mb: 2 }}>{message}</Alert>}{error && <Alert severity="error" action={<Button onClick={() => void load()}>Retry</Button>} sx={{ mb: 2 }}>{error}</Alert>}{!data && !error && <LinearProgress/>}
+    {data && <Stack spacing={2}>
+      <Card variant="outlined"><CardContent><Stack direction="row" alignItems="center" spacing={1} mb={1}><NotificationsActive color="primary"/><Typography variant="h6">Updates</Typography></Stack><Typography color="text.secondary" mb={1.5}>Choose how to receive changes when assigned work or checklist items are added, edited, completed, or reopened.</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+        <FormControlLabel control={<Switch disabled={busy || !data.preferences.emailAvailable} checked={data.preferences.emailEnabled} onChange={event => void savePreferences({ emailEnabled: event.target.checked })}/>} label={data.preferences.emailAvailable ? 'Email updates' : 'Email unavailable'}/>
+        <FormControlLabel control={<Switch disabled={busy} checked={data.preferences.pushEnabled && data.preferences.activePushSubscriptions > 0} onChange={event => event.target.checked ? void enablePush() : void savePreferences({ pushEnabled: false })}/>} label={`Browser notifications${data.preferences.activePushSubscriptions ? ` (${data.preferences.activePushSubscriptions} device${data.preferences.activePushSubscriptions === 1 ? '' : 's'})` : ''}`}/>
+      </Stack><Typography variant="caption" color="text.secondary">On iPhone, browser notifications require the app to be added to the Home Screen.</Typography></CardContent></Card>
+      <Typography color="text.secondary">{taskCount} active task{taskCount === 1 ? '' : 's'} across {data.projects.length} project{data.projects.length === 1 ? '' : 's'} · refreshed {new Date(data.generatedAt).toLocaleString()}</Typography>
+      {!data.projects.length ? <Alert severity="success">No active tasks are currently assigned.</Alert> : data.projects.map(project => { const key = project.projectId || 'none', open = expanded === key, checklist = project.tasks.flatMap(task => task.checklist), done = checklist.filter(item => item.completed).length; return <Card key={key} variant="outlined">
+        <CardActionArea onClick={() => setExpanded(open ? null : key)}><CardContent><Stack direction="row" justifyContent="space-between" alignItems="center" gap={2}><Box flex={1}><Typography variant="h6">{project.projectName}</Typography><Typography color="text.secondary">{project.tasks.length} task{project.tasks.length === 1 ? '' : 's'} · {done}/{checklist.length} checklist items done</Typography></Box>{open ? <ExpandLess/> : <ExpandMore/>}</Stack><Stack direction="row" justifyContent="space-between" mt={2}><Typography variant="body2">Project progress</Typography><Typography variant="body2" fontWeight={700}>{project.progress || 0}%</Typography></Stack><LinearProgress variant="determinate" value={project.progress || 0} sx={{ mt: 1, height: 8, borderRadius: 4 }}/></CardContent></CardActionArea>
+        <Collapse in={open} unmountOnExit><Divider/><Box sx={{ p: 2 }}><ToggleButtonGroup exclusive size="small" value={filter} onChange={(_, value) => value && setFilter(value)} sx={{ mb: 2 }}><ToggleButton value="todo">To do</ToggleButton><ToggleButton value="done">Done</ToggleButton><ToggleButton value="all">All</ToggleButton></ToggleButtonGroup><Stack spacing={1.5}>{project.tasks.map(task => { const items = task.checklist.filter(item => filter === 'all' || (filter === 'done' ? item.completed : !item.completed)); if (!items.length && task.checklist.length && filter !== 'all') return null; return <Paper key={task.id} variant="outlined" sx={{ p: 2 }}><Stack direction="row" justifyContent="space-between" gap={1}><Box><Typography fontWeight={750}>{task.title}</Typography>{task.description && <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>{task.description}</Typography>}</Box><Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>{task.blocked && <Chip size="small" color="warning" label="Blocked"/>}<Chip size="small" variant="outlined" label={label(task.priority)}/></Stack></Stack><Typography variant="caption" color="text.secondary">{label(task.status)} · {task.dueDate ? `Due ${new Date(`${task.dueDate}T12:00:00`).toLocaleDateString()}` : 'No due date'}</Typography>{task.checklist.length ? <Stack mt={1.5}>{items.map(item => <Stack key={item.id} direction="row" alignItems="center"><Checkbox checked={item.completed} disabled size="small"/><Typography sx={{ textDecoration: item.completed ? 'line-through' : 'none', color: item.completed ? 'text.secondary' : 'text.primary' }}>{item.description}</Typography>{item.required && <Chip label="Required" size="small" sx={{ ml: 'auto' }}/>}</Stack>)}</Stack> : <Alert severity="info" sx={{ mt: 1.5 }}>This task has no checklist items.</Alert>}</Paper>; })}</Stack></Box></Collapse>
+      </Card>; })}
+    </Stack>}
+    <Typography variant="caption" color="text.secondary" display="block" textAlign="center" mt={4}>Read-only shared portal · No sign-in required</Typography>
   </Box></Box></ThemeProvider>;
 }

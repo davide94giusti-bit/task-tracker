@@ -24,10 +24,10 @@ describe('person master links and dependency drilldowns', () => {
     const app = read('apps/connected-web/src/App.tsx');
     const publicView = read('apps/connected-web/src/PublicPersonTasks.tsx');
     const migration = read('supabase/migrations/0008_person_task_share_links.sql');
-    expect(app).toContain('Copy master link');
-    expect(app).toContain("updateLink('regenerate')");
-    expect(app).toContain("updateLink('revoke')");
-    expect(publicView).toContain('current active tasks whenever it is opened or refreshed');
+    expect(app).toContain('Copy link');
+    expect(app).toContain("requestLink('regenerate')");
+    expect(app).toContain("requestLink('revoke')");
+    expect(publicView).toContain('live, read-only view');
     expect(migration).toContain('public.public_person_task_share');
     expect(migration).not.toContain("'costAmount'");
     expect(migration).not.toContain("'notes'");

@@ -96,11 +96,13 @@ export default <WorkerHandler<Env>>{
         );
       }
       if (url.pathname === "/share-link") {
-        const input = (await body(request)) as { personId?: string; action?: string };
+        const input = (await body(request)) as { personId?: string; action?: string; channel?: string };
         const personId = Uuid.parse(input.personId);
         const action = input.action || "ensure";
-        if (!["ensure", "regenerate", "revoke"].includes(action))
+        if (!["ensure", "regenerate", "revoke", "mark-shared"].includes(action))
           throw Object.assign(new Error("Invalid share-link action"), { status: 400 });
+        if (action === "mark-shared" && !["email", "whatsapp", "copy"].includes(input.channel || ""))
+          throw Object.assign(new Error("Invalid share channel"), { status: 400 });
         const people = (await call(env.DATA, "/select", env, context, {
           method: "POST",
           body: JSON.stringify({ table: "people", filters: { id: personId, deleted_at: null }, limit: 1 }),
@@ -136,7 +138,23 @@ export default <WorkerHandler<Env>>{
             if (!share) throw new Error("Unable to create the shared-task link");
           }
         }
-        return json({ active: true, token: await shareToken(share.id, env.INTERNAL_SERVICE_TOKEN) }, 200, requestId);
+        if (action === "mark-shared") {
+          const sharedAt = new Date().toISOString();
+          const updated = (await call(env.DATA, "/write", env, context, {
+            method: "POST",
+            body: JSON.stringify({ table: "person_task_shares", method: "patch", id: share.id, row: { last_shared_at: sharedAt, last_shared_channel: input.channel } }),
+          })) as any[];
+          share = updated[0] || { ...share, lastSharedAt: sharedAt, lastSharedChannel: input.channel };
+        }
+        return json({
+          active: true,
+          token: await shareToken(share.id, env.INTERNAL_SERVICE_TOKEN),
+          createdAt: share.createdAt,
+          lastSharedAt: share.lastSharedAt || null,
+          lastSharedChannel: share.lastSharedChannel || null,
+          emailEnabled: Boolean(share.emailEnabled),
+          pushEnabled: Boolean(share.pushEnabled),
+        }, 200, requestId);
       }
       return json(
         {

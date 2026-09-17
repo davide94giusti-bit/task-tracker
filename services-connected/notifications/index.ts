@@ -10,6 +10,13 @@ interface Env extends BaseEnv {
   EMAIL_DAILY_CEILING?: string;
 }
 
+const encode = (bytes: ArrayBuffer) =>
+  btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+async function personShareToken(id: string, secret: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return `${id}.${encode(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(id)))}`;
+}
+
 async function email(env: Env, to: string, input: { title: string; dateLabel: string; url: string; kind: string }, idempotency: string) {
   const template = reminderEmail(input);
   const response = await fetch("https://api.resend.com/emails", {
@@ -53,6 +60,37 @@ export default <WorkerHandler<Env>>{
         }
         const delivered = (!d.pushEnabled || pushSent) && (!d.emailEnabled || emailSent), attempt = Number(d.attemptCount || 1), terminal = attempt >= 5 || errorCode === "EMAIL_PERMANENT", status = delivered ? "delivered" : errorCode === "EMAIL_DAILY_CEILING" ? "quota_reached" : terminal ? "failed" : "retry", nextAttemptAt = status === "retry" ? new Date(Date.now() + Math.min(3600, 30 * 2 ** attempt) * 1000).toISOString() : undefined;
         await call(env.DATA, "/admin/complete-delivery", env, system, { method: "POST", body: JSON.stringify({ deliveryId: d.deliveryId, status, emailSent, pushSent, errorCode, nextAttemptAt }) });
+        return json({ status, emailSent, pushSent }, 200, requestId);
+      }
+      if (url.pathname === "/deliver-person-share") {
+        const d = await body(request) as any,
+          token = await personShareToken(d.shareId, env.INTERNAL_SERVICE_TOKEN),
+          link = `${env.APP_URL}/shared-tasks?token=${encodeURIComponent(token)}`,
+          system = { userId: "scheduler" };
+        const subscriptions = d.pushEnabled && !d.pushSent ? await call(env.DATA, "/admin/person-share-subscriptions", env, system, { method: "POST", body: JSON.stringify({ shareId: d.shareId }) }) as any[] : [];
+        let pushSent = !!d.pushSent, emailSent = !!d.emailSent, errorCode: string | undefined;
+        for (const subscription of subscriptions) {
+          try {
+            const response = await sendWebPush(
+              { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
+              { title: d.title, body: d.detail || "Your assigned work changed.", url: link, tag: `person-share-${d.deliveryId}` },
+              { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateJwk: env.VAPID_PRIVATE_JWK },
+            );
+            if (response.ok) pushSent = true;
+            else if (response.status === 404 || response.status === 410)
+              await call(env.DATA, "/admin/disable-person-share-subscription", env, system, { method: "POST", body: JSON.stringify({ id: subscription.id, shareId: d.shareId }) });
+          } catch { errorCode = "PUSH_FAILED"; }
+        }
+        if (d.emailEnabled && !emailSent && d.recipientEmail) {
+          const count = Number(await call(env.DATA, "/admin/person-share-email-count", env, system, { method: "POST", body: "{}" })), ceiling = Number(env.EMAIL_DAILY_CEILING || 75);
+          if (count >= ceiling) errorCode = "EMAIL_DAILY_CEILING";
+          else try {
+            await email(env, d.recipientEmail, { title: d.title, dateLabel: d.detail || "Your assigned work changed.", url: link, kind: "Task update" }, `person-share-${d.deliveryId}`);
+            emailSent = true;
+          } catch (error) { errorCode = (error as any).permanent ? "EMAIL_PERMANENT" : "EMAIL_TRANSIENT"; }
+        }
+        const delivered = (!d.pushEnabled || pushSent) && (!d.emailEnabled || emailSent), attempt = Number(d.attemptCount || 1), terminal = attempt >= 5 || errorCode === "EMAIL_PERMANENT", status = delivered ? "delivered" : errorCode === "EMAIL_DAILY_CEILING" ? "quota_reached" : terminal ? "failed" : "retry", nextAttemptAt = status === "retry" ? new Date(Date.now() + Math.min(3600, 30 * 2 ** attempt) * 1000).toISOString() : undefined;
+        await call(env.DATA, "/admin/complete-person-share-event", env, system, { method: "POST", body: JSON.stringify({ deliveryId: d.deliveryId, status, emailSent, pushSent, errorCode, nextAttemptAt }) });
         return json({ status, emailSent, pushSent }, 200, requestId);
       }
       const context = workspaceContext(request);

@@ -896,7 +896,7 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, mo
           )}
         </DialogContent>
         <DialogActions sx={mobile ? { position: 'sticky', bottom: 0, zIndex: 3, flexShrink: 0, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper', px: 2, pt: 1.25, pb: 'calc(20px + env(safe-area-inset-bottom))', boxShadow: '0 -8px 20px rgba(0,0,0,.18)', '& .MuiButton-root': { minHeight: 44 } } : undefined}>
-          <Button startIcon={<ArrowBack />} onClick={goBack}>{history.length > 1 ? 'Previous task' : 'Back to tasks'}</Button>
+          <Button startIcon={<ArrowBack />} onClick={goBack}>{history.length > 1 ? 'Previous task' : 'Back'}</Button>
           {shownTask?.status !== 'completed' && <Button color="success" variant="outlined" startIcon={completing ? <CircularProgress size={18} /> : <CheckCircle />} disabled={completing} onClick={() => void completeTask()}>Complete task</Button>}
           <Button variant="contained" startIcon={<Edit />} disabled={!shownTask} onClick={() => shownTask && onEdit(shownTask)}>Edit task</Button>
         </DialogActions>

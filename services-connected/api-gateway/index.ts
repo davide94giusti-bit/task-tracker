@@ -170,14 +170,21 @@ export default <WorkerHandler<Env>>{
           new Error("Origin not allowed"),
           403,
         );
-      if (request.method === "GET" && url.pathname === "/v1/public/person-tasks") {
-        const shareId = await verifyShareToken(url.searchParams.get("token") || "", env.INTERNAL_SERVICE_TOKEN);
-        const result = await call(env.DATA, "/public/person-tasks", env, undefined, {
+      const publicRoutes: Record<string, string> = {
+        "/v1/public/person-tasks": "/public/person-tasks",
+        "/v1/public/person-preferences": "/public/person-preferences",
+        "/v1/public/person-push-subscribe": "/public/person-push-subscribe",
+      };
+      if (publicRoutes[url.pathname] && (request.method === "GET" || request.method === "POST")) {
+        const payload = request.method === "POST" ? await body(request) as Record<string, unknown> : {};
+        const token = request.method === "GET" ? url.searchParams.get("token") || "" : String(payload.token || "");
+        const shareId = await verifyShareToken(token, env.INTERNAL_SERVICE_TOKEN);
+        const result = await call(env.DATA, publicRoutes[url.pathname], env, undefined, {
           method: "POST",
-          body: JSON.stringify({ shareId }),
+          body: JSON.stringify({ ...payload, token: undefined, shareId }),
           headers: { "x-request-id": requestId },
         });
-        if (!result) throw Object.assign(new Error("This shared-task link is unavailable or has been revoked"), { status: 404 });
+        if (!result && url.pathname === "/v1/public/person-tasks") throw Object.assign(new Error("This shared-task link is unavailable or has been revoked"), { status: 404 });
         return json(result, 200, requestId, headers || {});
       }
       const base = await authenticate(request, env),
