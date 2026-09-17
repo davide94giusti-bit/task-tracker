@@ -75,7 +75,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
       setError((reason as Error).message);
     }
   };
-  const progress = (task: Task) => Math.max(0, Math.min(100, task.calculatedProgress || 0));
+  const progress = (task: Task) => task.status === 'completed' ? 100 : Math.max(0, Math.min(100, task.calculatedProgress || 0));
   const cards = sorted.map((task) => (
     <Card key={task.id} variant="outlined" sx={{ borderLeft: `4px solid ${priorityColor(task)}`, minHeight: 178 }}>
       <CardActionArea onClick={() => onOpen(task)} sx={{ height: '100%' }}>
@@ -139,7 +139,8 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
         </Button>
       </Stack>
       <Paper variant="outlined" sx={{ p: 1.25, mb: 2 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }} justifyContent="space-between">
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
           <TextField
             select
             size="small"
@@ -200,8 +201,8 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
             <MenuItem value="priority">Priority</MenuItem>
             <MenuItem value="updated">Recently updated</MenuItem>
           </TextField>
-        </Stack>
-        <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" mt={1}>
+          </Stack>
+          <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" sx={{ mt: { xs: 1, md: 0 }, ml: { md: 'auto' } }}>
             <ToggleButtonGroup exclusive size="small" value={layout} onChange={(_, value) => value && setLayout(value)} aria-label="Task layout">
               <ToggleButton value="table" aria-label="Table view">
                 <TableRows sx={{ mr: 0.5 }} />
@@ -217,6 +218,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
                 <Refresh />
               </IconButton>
             </Tooltip>
+          </Stack>
         </Stack>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} mt={1}>
           <TextField size="small" label="Search" value={filters.search} onChange={(event) => setFilters((value) => ({ ...value, search: event.target.value }))} />
@@ -711,7 +713,7 @@ type TaskDetailsPayload = {
   dependencies: TaskDependency[];
 };
 
-export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, mobile, refreshToken = 0 }: { task: Task | null; open: boolean; onClose: () => void; onEdit: (task: Task) => void; onCompleted: () => void; mobile: boolean; refreshToken?: number }) {
+export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, onDeleted, mobile, refreshToken = 0 }: { task: Task | null; open: boolean; onClose: () => void; onEdit: (task: Task) => void; onCompleted: () => void; onDeleted: () => void; mobile: boolean; refreshToken?: number }) {
   const [history, setHistory] = useState<Task[]>([]),
     [details, setDetails] = useState<TaskDetailsPayload | null>(null),
     [attachments, setAttachments] = useState<TaskAttachment[]>([]),
@@ -721,7 +723,10 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, mo
     [contactOpen, setContactOpen] = useState(false),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(false),
-    [completing, setCompleting] = useState(false);
+    [completing, setCompleting] = useState(false),
+    [deleting, setDeleting] = useState(false),
+    [completionOpen, setCompletionOpen] = useState(false),
+    [updatingChecklistId, setUpdatingChecklistId] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null),
     scrollPositions = useRef<Record<string, number>>({});
   const current = history[history.length - 1] || task;
@@ -732,6 +737,7 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, mo
       setAttachments([]);
       setResponsiblePerson(null);
       setContactOpen(false);
+      setCompletionOpen(false);
       scrollPositions.current = {};
     }
   }, [open, task?.id]);
@@ -800,6 +806,12 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, mo
     money = (value: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: currencyCode }).format(value);
   const completeTask = async () => {
     if (!shownTask) return;
+    const unfinishedChecklist = details?.checklist.filter((item) => item.required && !item.completed) || [];
+    const unfinishedDependencies = details?.dependencies.filter((dependency) => dependency.mandatory && !['completed', 'cancelled', 'archived'].includes(dependency.prerequisiteStatus)) || [];
+    if (unfinishedChecklist.length || unfinishedDependencies.length) {
+      setCompletionOpen(true);
+      return;
+    }
     setCompleting(true);
     setError('');
     try {
@@ -819,11 +831,40 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, mo
           expectedVersion: shownTask.version
         }
       });
+      setCompletionOpen(false);
       onCompleted();
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
       setCompleting(false);
+    }
+  };
+  const setChecklistCompleted = async (item: ChecklistItem, completed: boolean) => {
+    if (!shownTask || !item.id) return;
+    setUpdatingChecklistId(item.id);
+    setError('');
+    try {
+      await api('/tasks/checklist/save', { method: 'POST', timeoutMs: 60_000, body: { ...item, taskId: shownTask.id, completed } });
+      const refreshed = await api<TaskDetailsPayload>(`/tasks/details?taskId=${encodeURIComponent(shownTask.id)}`);
+      setDetails(refreshed);
+      setHistory((value) => value.map((entry, index) => index === value.length - 1 ? { ...entry, ...refreshed.task } : entry));
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setUpdatingChecklistId(null);
+    }
+  };
+  const deleteTask = async () => {
+    if (!shownTask || !confirm(`Move “${shownTask.title}” to Trash?`)) return;
+    setDeleting(true);
+    setError('');
+    try {
+      await api('/tasks/delete', { method: 'POST', body: { id: shownTask.id }, timeoutMs: 30_000 });
+      onDeleted();
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setDeleting(false);
     }
   };
   return (
@@ -895,13 +936,55 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, mo
             </Stack>
           )}
         </DialogContent>
-        <DialogActions sx={mobile ? { position: 'sticky', bottom: 0, zIndex: 3, flexShrink: 0, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper', px: 2, pt: 1.25, pb: 'calc(20px + env(safe-area-inset-bottom))', boxShadow: '0 -8px 20px rgba(0,0,0,.18)', '& .MuiButton-root': { minHeight: 44 } } : undefined}>
+        <DialogActions sx={mobile ? { position: 'sticky', bottom: 0, zIndex: 3, flexShrink: 0, display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 1, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper', px: 2, pt: 1.25, pb: 'calc(20px + env(safe-area-inset-bottom))', boxShadow: '0 -8px 20px rgba(0,0,0,.18)', '& .MuiButton-root': { minHeight: 44, m: 0 } } : undefined}>
           <Button startIcon={<ArrowBack />} onClick={goBack}>{history.length > 1 ? 'Previous task' : 'Back'}</Button>
+          <Button color="error" variant="outlined" startIcon={deleting ? <CircularProgress size={18} /> : <Delete />} disabled={!shownTask || deleting} onClick={() => void deleteTask()}>Delete task</Button>
           {shownTask?.status !== 'completed' && <Button color="success" variant="outlined" startIcon={completing ? <CircularProgress size={18} /> : <CheckCircle />} disabled={completing} onClick={() => void completeTask()}>Complete task</Button>}
           <Button variant="contained" startIcon={<Edit />} disabled={!shownTask} onClick={() => shownTask && onEdit(shownTask)}>Edit task</Button>
         </DialogActions>
       </Dialog>
       <PersonDetailsDialog personId={shownTask?.responsiblePersonId || null} fallbackName={responsiblePerson?.fullName || shownTask?.responsiblePersonName} open={contactOpen} onClose={() => setContactOpen(false)} mobile={mobile} />
+      <Dialog open={completionOpen} onClose={() => !completing && setCompletionOpen(false)} fullScreen>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <IconButton aria-label="Back to task details" onClick={() => setCompletionOpen(false)}><ArrowBack /></IconButton>
+            <Box><Typography variant="h6">Complete required work first</Typography><Typography variant="body2" color="text.secondary">{shownTask?.title}</Typography></Box>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ maxWidth: 820, mx: 'auto', py: 2 }}>
+            <Alert severity="warning" sx={{ mb: 2 }}>This task cannot be marked completed until every required checklist item and mandatory prerequisite below is complete.</Alert>
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+              <Typography variant="h6">Required checklist items</Typography>
+              <Stack spacing={0.5} mt={1}>
+                {details?.checklist.filter((item) => item.required).map((item) => <Stack key={item.id || item.description} direction="row" alignItems="center" spacing={1}>
+                  <Checkbox checked={item.completed} disabled={!item.id || updatingChecklistId === item.id} onChange={(event) => void setChecklistCompleted(item, event.target.checked)} />
+                  <Typography flex={1} sx={{ textDecoration: item.completed ? 'line-through' : 'none', color: item.completed ? 'text.secondary' : 'text.primary' }}>{item.description}</Typography>
+                  {updatingChecklistId === item.id && <CircularProgress size={18} />}
+                  {item.completed && <Chip size="small" color="success" label="Done" />}
+                </Stack>)}
+                {!details?.checklist.some((item) => item.required) && <Typography color="text.secondary">No required checklist items.</Typography>}
+              </Stack>
+            </Paper>
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="h6">Mandatory prerequisites</Typography>
+              <Typography variant="body2" color="text.secondary" mb={1}>Open an unfinished prerequisite to review or complete it.</Typography>
+              <Stack spacing={1}>
+                {details?.dependencies.filter((dependency) => dependency.mandatory).map((dependency) => {
+                  const done = ['completed', 'cancelled', 'archived'].includes(dependency.prerequisiteStatus);
+                  return <Card key={dependency.id} variant="outlined"><CardActionArea disabled={!dependency.prerequisiteTask || done} onClick={() => { setCompletionOpen(false); openDependency(dependency); }}><CardContent><Stack direction="row" alignItems="center" spacing={1}><Box flex={1}><Typography fontWeight={700}>{dependency.prerequisiteTitle}</Typography><Typography variant="body2" color="text.secondary">{dependency.prerequisiteStatus.replaceAll('_', ' ')}</Typography></Box><Chip size="small" color={done ? 'success' : 'warning'} label={done ? 'Done' : 'Open task'} />{!done && <OpenInNew color="action" />}</Stack></CardContent></CardActionArea></Card>;
+                })}
+                {!details?.dependencies.some((dependency) => dependency.mandatory) && <Typography color="text.secondary">No mandatory prerequisites.</Typography>}
+              </Stack>
+            </Paper>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ position: 'sticky', bottom: 0, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper', px: 2, py: 1.5, pb: 'calc(12px + env(safe-area-inset-bottom))' }}>
+          <Button startIcon={<ArrowBack />} onClick={() => setCompletionOpen(false)}>Back</Button>
+          <Button variant="contained" color="success" startIcon={completing ? <CircularProgress size={18} /> : <CheckCircle />} disabled={completing || !!details?.checklist.some((item) => item.required && !item.completed) || !!details?.dependencies.some((dependency) => dependency.mandatory && !['completed', 'cancelled', 'archived'].includes(dependency.prerequisiteStatus))} onClick={() => void completeTask()}>Mark completed</Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }
@@ -913,6 +996,7 @@ const reminderInputValue = (value?: string | null) => {
 };
 
 export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile }: { task: Task | null; newDate: string | null; open: boolean; onClose: () => void; onSaved: () => void; mobile: boolean }) {
+  const createdTaskId = useRef<string | null>(null);
   const [editor, setEditor] = useState({
     title: '',
     description: '',
@@ -943,6 +1027,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
     [error, setError] = useState('');
   useEffect(() => {
     if (!open) return;
+    createdTaskId.current = task?.id || null;
     setEditor({
       title: task?.title || '',
       description: task?.description || '',
@@ -1067,22 +1152,24 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
     }
   };
   const saveRelated = async (taskId: string) => {
-    await Promise.all(deletedChecklist.map((id) => api('/tasks/checklist/delete', { method: 'POST', body: { id } })));
+    await Promise.all(deletedChecklist.map((id) => api('/tasks/checklist/delete', { method: 'POST', timeoutMs: 60_000, body: { id } })));
     await Promise.all(
       checklist.map((item, index) =>
         api('/tasks/checklist/save', {
           method: 'POST',
+          timeoutMs: 60_000,
           body: { ...item, taskId, position: index }
         })
       )
     );
-    await Promise.all(deletedDependencies.map((id) => api('/dependencies/unlink', { method: 'POST', body: { id } })));
+    await Promise.all(deletedDependencies.map((id) => api('/dependencies/unlink', { method: 'POST', timeoutMs: 60_000, body: { id } })));
     await Promise.all(
       dependencies
         .filter((item) => !item.id.startsWith('new-'))
         .map((item) =>
           api('/dependencies/update', {
             method: 'POST',
+            timeoutMs: 60_000,
             body: { id: item.id, mandatory: item.mandatory }
           })
         )
@@ -1093,6 +1180,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
         .map((item) =>
           api('/dependencies/link', {
             method: 'POST',
+            timeoutMs: 60_000,
             body: {
               waitingTaskId: taskId,
               prerequisiteTaskId: item.prerequisiteTaskId,
@@ -1118,6 +1206,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
     for (const link of pendingLinks)
       await api('/tasks/attachments/link', {
         method: 'POST',
+        timeoutMs: 60_000,
         body: { taskId, ...link }
       });
   };
@@ -1136,24 +1225,28 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
         responsiblePersonId: editor.responsiblePersonId || null,
         costAmount: editor.costAmount === '' ? null : Number(editor.costAmount.replace(',', '.'))
       };
-      let taskId = task?.id;
+      let taskId = task?.id || createdTaskId.current;
       if (!taskId) {
         const initialStatus = (checklist.length || dependencies.length) && editor.status === 'completed' ? 'not_started' : editor.status;
         const created = await api<Task>('/tasks/save', {
           method: 'POST',
+          timeoutMs: 60_000,
           body: { ...body, status: initialStatus }
         });
         taskId = created.id;
+        createdTaskId.current = created.id;
         await saveRelated(taskId);
         if (initialStatus !== editor.status)
           await api('/tasks/save', {
             method: 'POST',
+            timeoutMs: 60_000,
             body: { id: taskId, ...body }
           });
       } else {
         await saveRelated(taskId);
         await api('/tasks/save', {
           method: 'POST',
+          timeoutMs: 60_000,
           body: { id: taskId, ...body }
         });
       }
@@ -1193,6 +1286,8 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
                 description: event.target.value
               }))
             }
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ '& .MuiInputLabel-root': { bgcolor: 'background.paper', px: 0.5 } }}
           />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField select fullWidth label="Status" value={editor.status} onChange={(event) => setEditor((value) => ({ ...value, status: event.target.value }))}>
@@ -1296,8 +1391,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
             </Stack>
             <Stack spacing={0.5}>
               {checklist.map((item, index) => (
-                <Stack key={item.id || index} direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} spacing={1}>
-                  <Stack direction="row" alignItems="center" flex={1}>
+                <Box key={item.id || index} sx={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto', columnGap: 0.5, rowGap: 0.75, alignItems: 'center', py: 0.5 }}>
                   <Checkbox checked={item.completed} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, completed: event.target.checked } : entry)))} />
                   <Typography
                     sx={{
@@ -1307,19 +1401,23 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
                   >
                     {item.description}
                   </Typography>
-                  </Stack>
-                  <TextField size="small" type="number" label={`Cost (${currencyCode})`} placeholder="N/A" value={item.costAmount ?? ''} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, costAmount: event.target.value === '' ? null : Number(event.target.value) } : entry)))} slotProps={{ htmlInput: { min: 0, step: 0.01 } }} sx={{ width: { xs: '100%', sm: 150 } }} />
-                  <FormControlLabel control={<Checkbox size="small" checked={item.required} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, required: event.target.checked } : entry)))} />} label="Required" />
                   <IconButton
+                    size="small"
                     aria-label="Delete checklist item"
                     onClick={() => {
                       if (item.id) setDeletedChecklist((value) => [...value, item.id!]);
                       setChecklist((value) => value.filter((_, i) => i !== index));
                     }}
                   >
-                    <Delete />
+                    <Delete fontSize="small" />
                   </IconButton>
-                </Stack>
+                  <Box />
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+                    <TextField size="small" type="number" label={`Cost (${currencyCode})`} placeholder="N/A" value={item.costAmount ?? ''} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, costAmount: event.target.value === '' ? null : Number(event.target.value) } : entry)))} slotProps={{ htmlInput: { min: 0, step: 0.01 } }} sx={{ width: { xs: '100%', sm: 150 } }} />
+                    <FormControlLabel control={<Checkbox size="small" checked={item.required} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, required: event.target.checked } : entry)))} />} label="Required" />
+                  </Stack>
+                  <Box />
+                </Box>
               ))}
             </Stack>
           </Paper>
