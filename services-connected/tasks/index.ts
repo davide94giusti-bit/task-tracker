@@ -3,6 +3,7 @@ import {
   ChecklistWrite,
   CostQuery,
   ProjectWrite,
+  ProjectDelete,
   RecordId,
   TaskAttachmentLink,
   TaskAttachmentUpload,
@@ -279,7 +280,15 @@ export default <WorkerHandler<Env>>{
           requestId,
         );
       if (url.pathname === "/project-save") {
-        const project = ProjectWrite.parse(await body(request)),
+        const project = ProjectWrite.parse(await body(request));
+        if (project.id) return json(await call(env.DATA, "/rpc", env, context, {
+          method: "POST",
+          body: JSON.stringify({ name: "update_project", args: {
+            p_project_id: project.id, p_name: project.name, p_description: project.description,
+            p_color: project.color, p_expected_version: project.expectedVersion,
+          } }),
+        }), 200, requestId);
+        const
           row = {
             name: project.name,
             description: project.description,
@@ -302,6 +311,13 @@ export default <WorkerHandler<Env>>{
           200,
           requestId,
         );
+      }
+      if (url.pathname === "/project-delete") {
+        const input = ProjectDelete.parse(await body(request));
+        return json(await call(env.DATA, "/rpc", env, context, {
+          method: "POST",
+          body: JSON.stringify({ name: "delete_project", args: { p_project_id: input.id, p_expected_version: input.expectedVersion } }),
+        }), 200, requestId);
       }
       return json(
         {

@@ -12,6 +12,7 @@ import type {
   Fetcher,
   WorkerHandler,
 } from "../_shared/types";
+import { PersonShareChecklistUpdate, PersonShareComment, PersonShareProjectPersonMutation, PersonShareTaskComplete, PersonShareVerification } from "../../packages/connected-contracts";
 interface Env extends BaseEnv {
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
@@ -44,10 +45,17 @@ const routes: Array<[string, RegExp, keyof Env, string]> = [
   ["GET", /^\/v1\/calendar$/, "TASKS", "/calendar"],
   ["GET", /^\/v1\/projects$/, "TASKS", "/projects"],
   ["POST", /^\/v1\/projects\/save$/, "TASKS", "/project-save"],
+  ["POST", /^\/v1\/projects\/delete$/, "TASKS", "/project-delete"],
   ["GET", /^\/v1\/people$/, "PEOPLE", "/list"],
   ["GET", /^\/v1\/people\/details$/, "PEOPLE", "/details"],
   ["POST", /^\/v1\/people\/save$/, "PEOPLE", "/save"],
+  ["GET", /^\/v1\/people\/project-people$/, "PEOPLE", "/project-people"],
+  ["POST", /^\/v1\/people\/project-people\/save$/, "PEOPLE", "/project-people/save"],
+  ["POST", /^\/v1\/people\/project-people\/create$/, "PEOPLE", "/project-people/create"],
+  ["POST", /^\/v1\/people\/project-people\/remove$/, "PEOPLE", "/project-people/remove"],
   ["POST", /^\/v1\/people\/share-link$/, "PEOPLE", "/share-link"],
+  ["POST", /^\/v1\/people\/claim-linked-project$/, "PEOPLE", "/claim-linked-project"],
+  ["GET", /^\/v1\/people\/linked-projects$/, "PEOPLE", "/linked-projects"],
   ["GET", /^\/v1\/dependencies\/people-load$/, "DEPENDENCIES", "/people-load"],
   ["POST", /^\/v1\/dependencies\/link$/, "DEPENDENCIES", "/link"],
   ["POST", /^\/v1\/dependencies\/unlink$/, "DEPENDENCIES", "/unlink"],
@@ -114,7 +122,7 @@ const cors = (origin: string, env: Env) => {
     "Access-Control-Allow-Origin": origin,
     Vary: "Origin",
     "Access-Control-Allow-Headers":
-      "Authorization, Content-Type, X-Idempotency-Key, X-Request-ID",
+      "Authorization, Content-Type, X-Idempotency-Key, X-Request-ID, X-Share-Verification",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
   };
 };
@@ -130,6 +138,21 @@ async function verifyShareToken(token: string, secret: string) {
   const valid = await crypto.subtle.verify("HMAC", key, decodeSignature(signature), new TextEncoder().encode(id));
   if (!valid) throw Object.assign(new Error("This shared-task link is invalid"), { status: 404 });
   return id;
+}
+async function signVerification(shareId: string, secret: string) {
+  const expires = Math.floor(Date.now() / 1000) + 30 * 60;
+  const value = `${shareId}.${expires}`;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${value}:verified`));
+  return `${value}.${btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}`;
+}
+async function verifyVerification(token: string, shareId: string, secret: string) {
+  const [id, expires, signature, extra] = token.split(".");
+  if (id !== shareId || !expires || !signature || extra || Number(expires) <= Math.floor(Date.now() / 1000))
+    throw Object.assign(new Error("Email verification is required to update shared work"), { status: 401 });
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  const valid = await crypto.subtle.verify("HMAC", key, decodeSignature(signature), new TextEncoder().encode(`${id}.${expires}:verified`));
+  if (!valid) throw Object.assign(new Error("Email verification has expired or is invalid"), { status: 401 });
 }
 export default <WorkerHandler<Env>>{
   async fetch(request, env) {
@@ -174,14 +197,38 @@ export default <WorkerHandler<Env>>{
         "/v1/public/person-tasks": "/public/person-tasks",
         "/v1/public/person-preferences": "/public/person-preferences",
         "/v1/public/person-push-subscribe": "/public/person-push-subscribe",
+        "/v1/public/person-checklist": "/public/person-checklist",
+        "/v1/public/person-complete": "/public/person-complete",
+        "/v1/public/person-comment": "/public/person-comment",
+        "/v1/public/person-project-person": "/public/person-project-person",
       };
+      if (["/v1/public/person-verification/request", "/v1/public/person-verification/verify"].includes(url.pathname) && request.method === "POST") {
+        const payload = await body(request) as Record<string, unknown>;
+        const shareId = await verifyShareToken(String(payload.token || ""), env.INTERNAL_SERVICE_TOKEN);
+        if (url.pathname.endsWith("/request")) {
+          const result = await call(env.NOTIFICATIONS, "/person-verification", env, undefined, { method: "POST", body: JSON.stringify({ shareId }), headers: { "x-request-id": requestId } });
+          return json(result, 200, requestId, headers || {});
+        }
+        const verification = PersonShareVerification.parse({ code: payload.code });
+        const result = await call(env.DATA, "/public/person-verification-verify", env, undefined, { method: "POST", body: JSON.stringify({ shareId, code: verification.code }), headers: { "x-request-id": requestId } }) as { verified: boolean };
+        if (!result.verified) throw Object.assign(new Error("The verification code is invalid or expired"), { status: 401 });
+        return json({ verificationToken: await signVerification(shareId, env.INTERNAL_SERVICE_TOKEN), expiresInMinutes: 30 }, 200, requestId, headers || {});
+      }
       if (publicRoutes[url.pathname] && (request.method === "GET" || request.method === "POST")) {
         const payload = request.method === "POST" ? await body(request) as Record<string, unknown> : {};
         const token = request.method === "GET" ? url.searchParams.get("token") || "" : String(payload.token || "");
         const shareId = await verifyShareToken(token, env.INTERNAL_SERVICE_TOKEN);
+        const publicPayload = { ...payload };
+        delete publicPayload.token;
+        if (["/v1/public/person-checklist", "/v1/public/person-complete", "/v1/public/person-comment", "/v1/public/person-project-person"].includes(url.pathname))
+          await verifyVerification(request.headers.get("x-share-verification") || "", shareId, env.INTERNAL_SERVICE_TOKEN);
+        const mutation = url.pathname === "/v1/public/person-checklist" ? PersonShareChecklistUpdate.parse({ itemId: payload.itemId, completed: payload.completed, expectedVersion: payload.expectedVersion })
+          : url.pathname === "/v1/public/person-complete" ? PersonShareTaskComplete.parse({ taskId: payload.taskId, expectedVersion: payload.expectedVersion })
+          : url.pathname === "/v1/public/person-comment" ? PersonShareComment.parse({ taskId: payload.taskId, comment: payload.comment })
+          : url.pathname === "/v1/public/person-project-person" ? PersonShareProjectPersonMutation.parse(publicPayload) : payload;
         const result = await call(env.DATA, publicRoutes[url.pathname], env, undefined, {
           method: "POST",
-          body: JSON.stringify({ ...payload, token: undefined, shareId }),
+          body: JSON.stringify({ ...mutation, token: undefined, shareId }),
           headers: { "x-request-id": requestId },
         });
         if (!result && url.pathname === "/v1/public/person-tasks") throw Object.assign(new Error("This shared-task link is unavailable or has been revoked"), { status: 404 });

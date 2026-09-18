@@ -65,7 +65,9 @@ export const ProjectWrite = z.object({
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
     .default("#2563eb"),
+  expectedVersion: z.number().int().positive().optional(),
 });
+export const ProjectDelete = z.object({ id: Uuid, expectedVersion: z.number().int().positive() }).strict();
 export const TaskQuery = z
   .object({
     view: z
@@ -176,6 +178,64 @@ export const InvitationCreate = z.object({ email: EmailAddress }).strict();
 export const InvitationAction = z.object({ invitationId: Uuid }).strict();
 export const InvitationAccept = z.object({}).strict();
 export const UserAccessAction = z.object({ userId: Uuid }).strict();
+export const PersonShareConfigure = z.object({
+  personId: Uuid,
+  action: z.literal("configure"),
+  scopeMode: z.enum(["assigned", "project"]),
+  projectId: Uuid.nullable().optional(),
+  allowChecklistUpdates: z.boolean(),
+  allowTaskCompletion: z.boolean(),
+  allowComments: z.boolean(),
+  allowViewProjectContacts: z.boolean().default(false),
+  allowViewContactAssignments: z.boolean().default(false),
+  allowSuperviseContactChecklists: z.boolean().default(false),
+  allowCompleteContactTasks: z.boolean().default(false),
+  allowManageProjectContacts: z.boolean().default(false),
+  expiresAt: z.string().datetime({ offset: true }).nullable(),
+}).strict().refine(value => value.scopeMode !== "project" || Boolean(value.projectId), {
+  message: "A project is required for project collaboration",
+  path: ["projectId"],
+});
+export const ProjectPersonSave = z.object({
+  projectId: Uuid,
+  personId: Uuid,
+  sharePhone: z.boolean().default(false),
+  shareEmail: z.boolean().default(false),
+  shareAddress: z.boolean().default(false),
+  shareNotes: z.boolean().default(false),
+  supervisable: z.boolean().default(false),
+}).strict();
+export const ProjectPersonRemove = z.object({ projectId: Uuid, personId: Uuid }).strict();
+export const ProjectPersonCreate = ProjectPersonSave.omit({ personId: true }).extend({
+  fullName: z.string().trim().min(1).max(300),
+  role: z.string().trim().max(300).default(""),
+  company: z.string().trim().max(300).default(""),
+  phone: z.string().trim().max(100).default(""),
+  email: EmailAddress.or(z.literal("")).default(""),
+  address: z.string().trim().max(1000).default(""),
+  notes: z.string().max(10000).default(""),
+}).strict();
+export const PersonShareVerification = z.object({ code: z.string().regex(/^\d{6}$/) }).strict();
+export const PersonShareChecklistUpdate = z.object({
+  itemId: Uuid, completed: z.boolean(), expectedVersion: z.number().int().positive().optional(),
+}).strict();
+export const PersonShareTaskComplete = z.object({
+  taskId: Uuid, expectedVersion: z.number().int().positive().optional(),
+}).strict();
+export const PersonShareComment = z.object({ taskId: Uuid, comment: z.string().trim().min(1).max(2000) }).strict();
+const SharedProjectPersonFields = z.object({
+  fullName: z.string().trim().min(1).max(300), role: z.string().trim().max(300).default(""),
+  company: z.string().trim().max(300).default(""), phone: z.string().trim().max(100).default(""),
+  email: EmailAddress.or(z.literal("")).default(""), address: z.string().trim().max(1000).default(""),
+  notes: z.string().max(10000).default(""), sharePhone: z.boolean().default(false),
+  shareEmail: z.boolean().default(false), shareAddress: z.boolean().default(false),
+  shareNotes: z.boolean().default(false), supervisable: z.boolean().default(false),
+});
+export const PersonShareProjectPersonMutation = z.discriminatedUnion("action", [
+  SharedProjectPersonFields.extend({ action: z.literal("create") }).strict(),
+  SharedProjectPersonFields.extend({ action: z.literal("update"), personId: Uuid }).strict(),
+  z.object({ action: z.literal("remove"), personId: Uuid }).strict(),
+]);
 export const AccountDeletionRequest = z
   .object({
     confirmation: z.literal("DELETE MY ACCOUNT"),

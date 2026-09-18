@@ -41,6 +41,22 @@ export default <WorkerHandler<Env>>{
       internal(request, env);
       const url = new URL(request.url);
       if (url.pathname === "/health") return json(health("connected-notifications", ["data", "resend", "web-push"]), 200, requestId);
+      if (url.pathname === "/person-verification") {
+        const input = await body(request) as { shareId?: string };
+        if (!input.shareId) throw Object.assign(new Error("Shared-task link is required"), { status: 400 });
+        const values = new Uint32Array(1); crypto.getRandomValues(values);
+        const code = String(values[0] % 1_000_000).padStart(6, "0");
+        const recipient = await call(env.DATA, "/public/person-verification-code", env, undefined, {
+          method: "POST", body: JSON.stringify({ shareId: input.shareId, code }),
+        }) as { email: string; personName: string; expiresInMinutes: number };
+        await email(env, recipient.email, {
+          title: `Your verification code is ${code}`,
+          dateLabel: `This code expires in ${recipient.expiresInMinutes} minutes.`,
+          url: env.APP_URL,
+          kind: "Shared work verification",
+        }, `share-verification-${input.shareId}-${Date.now()}`);
+        return json({ sent: true, destination: recipient.email.replace(/^(.).+(@.+)$/, "$1***$2"), expiresInMinutes: recipient.expiresInMinutes }, 200, requestId);
+      }
       if (url.pathname === "/deliver") {
         const d = await body(request) as any, link = `${env.APP_URL}/?task=${encodeURIComponent(d.taskId)}`, system = { userId: "scheduler" };
         const subscriptions = d.pushEnabled && !d.pushSent ? await call(env.DATA, "/admin/subscriptions", env, system, { method: "POST", body: JSON.stringify({ workspaceId: d.workspaceId, userId: d.userId }) }) as any[] : [];

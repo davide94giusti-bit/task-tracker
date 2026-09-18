@@ -1,6 +1,6 @@
 export type View='dashboard'|'today'|'tasks'|'upcoming'|'calendar'|'projects'|'people'|'dependencies'|'completed'|'trash'|'settings'|'access'|'security'|'backup'|'diagnostics'|'manual';
 export type Task={id:string;title:string;description:string;status:string;priority:string;dueDate?:string|null;dueTime?:string|null;reminderAt?:string|null;completedAt?:string|null;costAmount?:number|null;projectId?:string|null;projectName?:string;responsiblePersonId?:string|null;responsiblePersonName?:string;calculatedProgress:number;checklistCompleted?:number;checklistTotal?:number;blocked:boolean;version:number;updatedAt:string};
-export type Project={id:string;name:string;color:string;description:string;progress:number;activeTasks:number};
+export type Project={id:string;name:string;color:string;description:string;progress:number;activeTasks:number;version:number};
 export type Person={id:string;fullName:string;role:string;company:string;phone?:string;email?:string;address?:string;website?:string;preferredContact?:string;notes?:string;tags?:string[];progress:number;activeTasks:number};
 export type Dashboard={counts:Record<string,number>;overallProgress:number;projectProgress:Project[];peopleProgress:Person[];workload:Array<{date:string;count:number}>};
 export type ChecklistItem={id?:string;taskId?:string;description:string;completed:boolean;required:boolean;position?:number;costAmount?:number|null};
