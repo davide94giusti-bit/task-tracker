@@ -5,6 +5,25 @@ import { CONNECTED_RELEASE } from '../../../packages/connected-contracts/release
 
 type ManualSection = { title: string; keywords: string; content: React.ReactNode };
 
+const manualVisuals = [
+  { src: '/manual/mobile.png', points: ['Top bar controls', 'Bottom navigation', 'More menu'] },
+  { src: '/manual/dashboard.png', points: ['Summary cards', 'Task filters', 'Refresh data'] },
+  { src: '/manual/dashboard.png', points: ['New task', 'Task details', 'Status and priority'] },
+  { src: '/manual/dashboard.png', points: ['Open a task', 'Checklist area', 'Task ownership'] },
+  { src: '/manual/dashboard.png', points: ['Blocked indicator', 'Task drill-down', 'Dependency view'] },
+  { src: '/manual/projects.png', points: ['Project card', 'Progress bar', 'Project actions'] },
+  { src: '/manual/projects.png', points: ['People directory', 'Recap action', 'Collaboration access'] },
+  { src: '/manual/projects.png', points: ['Linked project', 'Shared tasks', 'Verified updates'] },
+  { src: '/manual/mobile.png', points: ['Open Settings', 'Enable channel', 'Send test'] },
+  { src: '/manual/mobile.png', points: ['Users & access', 'Collapsed groups', 'Security controls'] },
+  { src: '/manual/dashboard.png', points: ['System menu', 'Diagnostics', 'Download report'] }
+];
+
+function ManualVisual({ index }: { index: number }) {
+  const visual = manualVisuals[index];
+  return <Box mt={2}><Typography fontWeight={700} mb={1}>Visual guide</Typography><Box sx={{ position: 'relative', borderRadius: 2, overflow: 'hidden', border: 1, borderColor: 'divider', bgcolor: 'background.default' }}><Box component="img" src={visual.src} alt={`Annotated Task Tracker view for ${visual.points.join(', ')}`} sx={{ display: 'block', width: '100%', maxHeight: 440, objectFit: 'contain' }}/>{visual.points.map((_, point) => <Box key={point} aria-hidden sx={{ position: 'absolute', top: `${18 + point * 27}%`, left: `${12 + point * 30}%`, width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', bgcolor: 'primary.main', color: 'primary.contrastText', fontWeight: 800, boxShadow: 3, '&:after': { content: '"➜"', position: 'absolute', left: 25, color: 'primary.main', fontSize: 28, textShadow: '0 1px 2px rgba(0,0,0,.45)' } }}>{point + 1}</Box>)}</Box><Stack component="ol" spacing={.5} mt={1} sx={{ pl: 3 }}>{visual.points.map(point => <Typography component="li" variant="body2" key={point}>{point}</Typography>)}</Stack></Box>;
+}
+
 const sections: ManualSection[] = [
   { title: 'Getting started and navigation', keywords: 'start navigation menu mobile desktop back dark light mode', content: <><Typography>Use the left navigation on desktop and the bottom navigation plus More menu on mobile. Back returns to the screen or filter you came from. The sun/moon control changes the signed-in application theme.</Typography><Typography mt={1}>Dashboard is the overview; Today, All Tasks, Upcoming, Calendar, Completed and Trash are task views.</Typography></> },
   { title: 'Dashboard and task views', keywords: 'dashboard overdue due today critical blocked waiting cards table refresh filter search', content: <><Typography>Dashboard cards open the matching task list. In a task view, use Priority, Project, Person and Status filters, search by text, choose Smart urgency or another sort, and switch between Table and Cards. Refresh reloads cloud data.</Typography><Typography mt={1}>A light Blocked chip means an incomplete mandatory prerequisite is preventing that task from progressing.</Typography></> },
@@ -30,7 +49,7 @@ export function UserManualView() {
     <Stack direction="row" spacing={1} mb={2} alignItems="center"><Chip label={`${matches.length} section${matches.length === 1 ? '' : 's'}`} /><Typography variant="body2" color="text.secondary">Matching sections open automatically while searching.</Typography></Stack>
     {matches.map((section) => <Accordion key={section.title} defaultExpanded={!!normalized} expanded={normalized ? true : undefined}>
       <AccordionSummary expandIcon={<ExpandMore />}><Typography fontWeight={750}>{section.title}</Typography></AccordionSummary>
-      <AccordionDetails>{section.content}</AccordionDetails>
+      <AccordionDetails>{section.content}<ManualVisual index={sections.indexOf(section)}/></AccordionDetails>
     </Accordion>)}
     {!matches.length && <Alert severity="info">No manual section matches “{query}”. Try a shorter word such as task, person, cost or notification.</Alert>}
   </Box>;

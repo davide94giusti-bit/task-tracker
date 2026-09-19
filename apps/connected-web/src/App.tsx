@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Accordion, AccordionDetails, AccordionSummary, Alert, AppBar, Avatar, BottomNavigation, BottomNavigationAction, Box, Button, Card, CardActionArea, CardActions, CardContent, Chip, CircularProgress, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, LinearProgress, List, ListItemButton, ListItemIcon, ListItemText, MenuItem, Paper, Snackbar, Stack, Switch, TextField, ThemeProvider, Toolbar, Tooltip, Typography, createTheme, useMediaQuery } from '@mui/material';
-import { Add, CalendarMonth, CheckCircle, CloudDone, Dashboard as DashboardIcon, DarkMode, Delete, Edit, Event, ExpandLess, ExpandMore, Folder, Groups, Inbox, InfoOutlined, LightMode, Logout, Menu, MenuBook, MoreHoriz, Notifications, People, Refresh, Settings, TaskAlt, Today } from '@mui/icons-material';
+import { Add, CalendarMonth, CheckCircle, CloudDone, Dashboard as DashboardIcon, DarkMode, Delete, Edit, Event, ExpandLess, ExpandMore, Folder, Groups, Inbox, InfoOutlined, LightMode, Logout, Menu, MenuBook, MoreHoriz, Notifications, People, Refresh, Security, Settings, TaskAlt, Today } from '@mui/icons-material';
 import { api, flushQueue } from './api';
 import { consumeAuthLink, resetPassword, session, signIn } from './auth';
 import { AccountSecurity, PasswordSetup, UsersAccessView } from './AccessViews';
@@ -20,8 +20,8 @@ const nav: {
     label: string;
     icon: JSX.Element;
     group: string;
-}[] = [{ view: 'dashboard', label: 'Dashboard', icon: <DashboardIcon />, group: 'Overview' }, { view: 'today', label: 'Today', icon: <Today />, group: 'Tasks' }, { view: 'tasks', label: 'All Tasks', icon: <Inbox />, group: 'Tasks' }, { view: 'upcoming', label: 'Upcoming', icon: <Event />, group: 'Tasks' }, { view: 'calendar', label: 'Calendar', icon: <CalendarMonth />, group: 'Tasks' }, { view: 'completed', label: 'Completed', icon: <CheckCircle />, group: 'Tasks' }, { view: 'trash', label: 'Trash', icon: <Delete />, group: 'Tasks' }, { view: 'projects', label: 'Projects', icon: <Folder />, group: 'Organization' }, { view: 'people', label: 'People', icon: <People />, group: 'Organization' }, { view: 'dependencies', label: 'Dependency load', icon: <Groups />, group: 'Organization' }, { view: 'settings', label: 'Settings', icon: <Settings />, group: 'System' }, { view: 'access', label: 'Users & access', icon: <Groups />, group: 'System' }, { view: 'security', label: 'Security', icon: <Settings />, group: 'System' }, { view: 'backup', label: 'Backup & import', icon: <CloudDone />, group: 'System' }, { view: 'diagnostics', label: 'Diagnostics', icon: <TaskAlt />, group: 'System' }, { view: 'manual', label: 'User manual', icon: <MenuBook />, group: 'System' }];
-function Login() { const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [sent, setSent] = useState(false);
+}[] = [{ view: 'dashboard', label: 'Dashboard', icon: <DashboardIcon />, group: 'Overview' }, { view: 'today', label: 'Today', icon: <Today />, group: 'Tasks' }, { view: 'tasks', label: 'All Tasks', icon: <Inbox />, group: 'Tasks' }, { view: 'upcoming', label: 'Upcoming', icon: <Event />, group: 'Tasks' }, { view: 'calendar', label: 'Calendar', icon: <CalendarMonth />, group: 'Tasks' }, { view: 'completed', label: 'Completed', icon: <CheckCircle />, group: 'Tasks' }, { view: 'trash', label: 'Trash', icon: <Delete />, group: 'Tasks' }, { view: 'projects', label: 'Projects', icon: <Folder />, group: 'Organization' }, { view: 'people', label: 'People', icon: <People />, group: 'Organization' }, { view: 'dependencies', label: 'Dependency load', icon: <Groups />, group: 'Organization' }, { view: 'settings', label: 'Settings', icon: <Settings />, group: 'System' }, { view: 'access', label: 'Users & access', icon: <Groups />, group: 'System' }, { view: 'security', label: 'Security', icon: <Security />, group: 'System' }, { view: 'backup', label: 'Backup & import', icon: <CloudDone />, group: 'System' }, { view: 'diagnostics', label: 'Diagnostics', icon: <TaskAlt />, group: 'System' }, { view: 'manual', label: 'User manual', icon: <MenuBook />, group: 'System' }];
+function Login({ onSignedIn }: { onSignedIn: () => void }) { const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [sent, setSent] = useState(false);
 return <Box className="login">
 <Card sx={{ width: 'min(430px,calc(100vw - 32px))' }}>
 <CardContent sx={{ p: 4 }}>
@@ -34,7 +34,7 @@ return <Box className="login">
 <TextField label="Password" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}/>
 <Button variant="contained" size="large" disabled={busy || !email || !password} onClick={async () => { setBusy(true); setError(''); try {
     await signIn(email, password);
-    location.reload();
+    onSignedIn();
 }
 catch (e) {
     setError((e as Error).message);
@@ -159,7 +159,14 @@ function ProjectPeopleDialog({ project, onClose }: { project: Project | null; on
 }
 function ProjectsView({ onOpen }: { onOpen: (project: Project) => void }) {
   const [items, setItems] = useState<Project[]>([]), [linked, setLinked] = useState<LinkedProject[]>([]), [open, setOpen] = useState(false), [editing, setEditing] = useState<Project | null>(null), [projectPeople, setProjectPeople] = useState<Project | null>(null), [deleting, setDeleting] = useState<Project | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState(() => { const value = sessionStorage.getItem('linked-project-claim-message') || ''; sessionStorage.removeItem('linked-project-claim-message'); return value; }), [form, setForm] = useState({ name: '', description: '', color: '#2563eb' });
-  const load = useCallback(() => { setError(''); return Promise.all([api<Project[]>('/projects'), api<LinkedProject[]>('/people/linked-projects')]).then(([owned, shared]) => { setItems(owned); setLinked(shared); }).catch(e => setError(e.message)); }, []);
+  const load = useCallback(async () => {
+    setError('');
+    const [owned, shared] = await Promise.allSettled([api<Project[]>('/projects'), api<LinkedProject[]>('/people/linked-projects')]);
+    if (owned.status === 'fulfilled') setItems(owned.value);
+    if (shared.status === 'fulfilled') setLinked(shared.value);
+    const failures = [owned, shared].filter(result => result.status === 'rejected') as PromiseRejectedResult[];
+    if (failures.length) setError(failures.length === 2 ? failures[0].reason.message : `Some projects could not be loaded: ${failures[0].reason.message}`);
+  }, []);
   useEffect(() => { void load(); }, [load]);
   const showCreate = () => { setEditing(null); setForm({ name: '', description: '', color: '#2563eb' }); setOpen(true); };
   const showEdit = (project: Project) => { setEditing(project); setForm({ name: project.name, description: project.description || '', color: project.color }); setOpen(true); };
@@ -167,8 +174,8 @@ function ProjectsView({ onOpen }: { onOpen: (project: Project) => void }) {
     <PageTitle title="Projects" subtitle="Group responsibilities and measure aggregate progress." action={<Button variant="contained" startIcon={<Add />} onClick={showCreate}>New project</Button>}/>
     {message && <Alert severity="success" onClose={() => setMessage('')} sx={{ mb: 2 }}>{message}</Alert>}
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-    <Box className="card-grid">{items.map(project => <Card key={project.id}><CardActionArea onClick={() => onOpen(project)}><CardContent><Stack direction="row" spacing={2}><Avatar sx={{ bgcolor: project.color }}>{project.name[0]}</Avatar><Box flex={1}><Typography variant="h6">{project.name}</Typography><Typography color="text.secondary">{project.activeTasks} active tasks</Typography><LinearProgress variant="determinate" value={project.progress} sx={{ mt: 2, height: 8, borderRadius: 4 }}/><Typography variant="caption">{project.progress}% complete</Typography></Box></Stack></CardContent></CardActionArea><Divider/><CardActions sx={{ flexWrap: 'wrap' }}><Button size="small" startIcon={<Groups/>} onClick={() => setProjectPeople(project)}>Project people</Button><Button size="small" startIcon={<Edit/>} onClick={() => showEdit(project)}>Rename / edit</Button><Button size="small" color="error" startIcon={<Delete/>} onClick={() => setDeleting(project)}>Delete</Button></CardActions></Card>)}</Box>
-    {linked.length > 0 && <><Typography variant="h5" mt={4} mb={.5}>Linked projects</Typography><Typography color="text.secondary" mb={2}>Projects shared with your Task Tracker account. They remain separate from your private workspace.</Typography><Box className="card-grid">{linked.map(project => <Card key={project.id}><CardActionArea onClick={() => { sessionStorage.setItem(`share-verification:${project.shareId}`, project.verificationToken); location.href = `/shared-tasks?token=${encodeURIComponent(project.token)}`; }}><CardContent><Stack direction="row" spacing={2}><Avatar sx={{ bgcolor: project.color }}>{project.name[0]}</Avatar><Box flex={1}><Stack direction="row" justifyContent="space-between"><Typography variant="h6">{project.name}</Typography><Chip size="small" color="secondary" label="Linked"/></Stack><Typography color="text.secondary">{project.activeTasks} active tasks</Typography><LinearProgress variant="determinate" value={project.progress} sx={{ mt: 2, height: 8, borderRadius: 4 }}/><Typography variant="caption">{project.progress}% complete · select to open</Typography></Box></Stack></CardContent></CardActionArea></Card>)}</Box></>}
+    <Box className="card-grid">{items.map(project => <Card key={project.id} sx={{ borderLeft: 5, borderLeftColor: project.color }}><CardActionArea onClick={() => onOpen(project)}><CardContent><Typography variant="h6">{project.name}</Typography><Typography color="text.secondary">{project.activeTasks} active tasks</Typography><LinearProgress variant="determinate" value={project.progress} sx={{ mt: 2, height: 8, borderRadius: 4 }}/><Typography variant="caption">{project.progress}% complete</Typography></CardContent></CardActionArea><Divider/><CardActions sx={{ flexWrap: 'wrap' }}><Button size="small" startIcon={<Groups/>} onClick={() => setProjectPeople(project)}>Project people</Button><Button size="small" startIcon={<Edit/>} onClick={() => showEdit(project)}>Rename / edit</Button><Button size="small" color="error" startIcon={<Delete/>} onClick={() => setDeleting(project)}>Delete</Button></CardActions></Card>)}</Box>
+    {linked.length > 0 && <><Typography variant="h5" mt={4} mb={.5}>Linked projects</Typography><Typography color="text.secondary" mb={2}>Projects shared with your Task Tracker account. They remain separate from your private workspace.</Typography><Box className="card-grid">{linked.map(project => <Card key={project.id} sx={{ borderLeft: 5, borderLeftColor: project.color }}><CardActionArea onClick={() => { sessionStorage.setItem(`share-verification:${project.token.slice(0, 36)}`, project.verificationToken); location.href = `/shared-tasks?token=${encodeURIComponent(project.token)}`; }}><CardContent><Stack direction="row" justifyContent="space-between"><Typography variant="h6">{project.name}</Typography><Chip size="small" color="secondary" label="Linked"/></Stack><Typography color="text.secondary">{project.activeTasks} active tasks</Typography><LinearProgress variant="determinate" value={project.progress} sx={{ mt: 2, height: 8, borderRadius: 4 }}/><Typography variant="caption">{project.progress}% complete · select to open</Typography></CardContent></CardActionArea></Card>)}</Box></>}
     <Dialog open={open} onClose={() => !busy && setOpen(false)} fullWidth maxWidth="sm"><DialogTitle>{editing ? 'Edit project' : 'Create project'}</DialogTitle><DialogContent><Stack spacing={2} mt={1}><TextField autoFocus label="Project name" value={form.name} onChange={e => setForm(v => ({ ...v, name: e.target.value }))}/><TextField multiline minRows={3} label="Description" value={form.description} onChange={e => setForm(v => ({ ...v, description: e.target.value }))}/><TextField label="Colour" type="color" value={form.color} onChange={e => setForm(v => ({ ...v, color: e.target.value }))} slotProps={{ inputLabel: { shrink: true } }}/></Stack></DialogContent><DialogActions><Button disabled={busy} onClick={() => setOpen(false)}>Cancel</Button><Button variant="contained" disabled={busy || !form.name.trim()} onClick={async () => { setBusy(true); setError(''); try { await api('/projects/save', { method: 'POST', body: { ...form, name: form.name.trim(), ...(editing ? { id: editing.id, expectedVersion: editing.version } : {}) } }); setOpen(false); setMessage(editing ? 'Project updated.' : 'Project created.'); await load(); } catch (reason) { setError((reason as Error).message); } finally { setBusy(false); } }}>{busy ? <CircularProgress size={20}/> : editing ? 'Save changes' : 'Create project'}</Button></DialogActions></Dialog>
     <Dialog open={!!deleting} onClose={() => !busy && setDeleting(null)} fullWidth maxWidth="xs"><DialogTitle>Delete project?</DialogTitle><DialogContent><Alert severity="warning" sx={{ mt: 1 }}>The project “{deleting?.name}” will be removed. Its {deleting?.activeTasks || 0} active task{deleting?.activeTasks === 1 ? '' : 's'} will be preserved under No project. Any guest or linked-project access will be revoked.</Alert></DialogContent><DialogActions><Button disabled={busy} onClick={() => setDeleting(null)}>Cancel</Button><Button color="error" variant="contained" disabled={busy || !deleting} onClick={async () => { if (!deleting) return; setBusy(true); setError(''); try { const result = await api<{ tasksPreserved: number }>('/projects/delete', { method: 'POST', body: { id: deleting.id, expectedVersion: deleting.version } }); setDeleting(null); setMessage(`Project deleted. ${result.tasksPreserved} task${result.tasksPreserved === 1 ? '' : 's'} preserved under No project.`); await load(); } catch (reason) { setError((reason as Error).message); } finally { setBusy(false); } }}>{busy ? <CircularProgress size={20}/> : 'Delete project'}</Button></DialogActions></Dialog>
     <ProjectPeopleDialog project={projectPeople} onClose={() => setProjectPeople(null)}/>
@@ -196,7 +203,7 @@ function PersonRecapDialog({ person, onClose }: { person: Person | null; onClose
       {details && <><Typography><strong>{details.fullName}</strong> has {tasks.length} pending task{tasks.length === 1 ? '' : 's'}.</Typography>
         {tasks.length === 0 ? <Alert severity="info">There are no pending tasks to send.</Alert> : <Accordion variant="outlined" disableGutters sx={{ '&:before': { display: 'none' } }}><AccordionSummary expandIcon={<ExpandMore />} aria-controls="recap-message-preview"><Box flex={1}><Typography fontWeight={700}>Message preview</Typography><Typography variant="body2" color="text.secondary">{tasks.length} pending task{tasks.length === 1 ? '' : 's'} · select to expand</Typography></Box></AccordionSummary><AccordionDetails id="recap-message-preview" sx={{ pt: 0 }}><Paper variant="outlined" sx={{ p: 2, maxHeight: 260, overflow: 'auto', whiteSpace: 'pre-wrap', bgcolor: 'background.default' }}>{recap?.body}</Paper></AccordionDetails></Accordion>}
         <Alert severity="info">Choose exactly what this person may see and update. Changes are limited to tasks assigned to them and require a code sent to their email.</Alert>
-        {share?.active && <Paper variant="outlined" sx={{ p: 2 }}><Stack spacing={1.5}><Typography fontWeight={700}>Collaboration access</Typography>
+        {share?.active && <Accordion variant="outlined" disableGutters sx={{ '&:before': { display: 'none' } }}><AccordionSummary expandIcon={<ExpandMore />}><Box><Typography fontWeight={700}>Collaboration access</Typography><Typography variant="body2" color="text.secondary">Permissions and expiry · select to expand</Typography></Box></AccordionSummary><AccordionDetails><Stack spacing={1.5}>
           <TextField select size="small" label="Visible work" value={access.scopeMode} onChange={e => setAccess(v => ({ ...v, scopeMode: e.target.value as 'assigned' | 'project' }))}><MenuItem value="assigned">All tasks assigned to this person</MenuItem><MenuItem value="project">One entire project</MenuItem></TextField>
           {access.scopeMode === 'project' && <TextField select size="small" label="Project" value={access.projectId} onChange={e => setAccess(v => ({ ...v, projectId: e.target.value }))}>{projectOptions.map(project => <MenuItem key={project.id} value={project.id}>{project.name}</MenuItem>)}</TextField>}
           <FormControlLabel control={<Switch checked={access.allowChecklistUpdates} onChange={e => setAccess(v => ({ ...v, allowChecklistUpdates: e.target.checked }))}/>} label="Can update checklist items"/>
@@ -211,7 +218,7 @@ function PersonRecapDialog({ person, onClose }: { person: Person | null; onClose
           </Stack></Paper>}
           <TextField size="small" type="date" label="Access expires (optional)" value={access.expiresAt} onChange={e => setAccess(v => ({ ...v, expiresAt: e.target.value }))} slotProps={{ inputLabel: { shrink: true } }}/>
           <Button variant="contained" disabled={loading || (access.scopeMode === 'project' && !access.projectId)} onClick={async () => { if (!person) return; setLoading(true); setError(''); try { const result = await api<ShareLinkState>('/people/share-link', { method: 'POST', body: { personId: person.id, action: 'configure', ...access, projectId: access.projectId || null, expiresAt: access.expiresAt ? new Date(`${access.expiresAt}T23:59:59Z`).toISOString() : null } }); setShare(result); setConfirmation('Collaboration access updated.'); } catch (reason) { setError((reason as Error).message); } finally { setLoading(false); } }}>Save access settings</Button>
-        </Stack></Paper>}
+        </Stack></AccordionDetails></Accordion>}
         {share?.active && <Paper variant="outlined" sx={{ p: 1.5 }}><Typography variant="body2"><strong>Link created:</strong> {share.createdAt ? new Date(share.createdAt).toLocaleString() : 'Available'}</Typography><Typography variant="body2"><strong>Last shared:</strong> {share.lastSharedAt ? `${new Date(share.lastSharedAt).toLocaleString()} via ${share.lastSharedChannel || 'link'}` : 'Not shared yet'}</Typography><Typography variant="body2"><strong>Recipient updates:</strong> Email {share.emailEnabled ? 'enabled' : 'disabled'} · Browser {share.pushEnabled ? 'enabled' : 'disabled'}</Typography></Paper>}
         {shareUrl ? <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3,minmax(0,1fr))' }, gap: 1 }}><Button size="small" variant="outlined" onClick={async () => { setError(''); try { await navigator.clipboard.writeText(shareUrl); setConfirmation('Master link copied to the clipboard.'); noteShared('copy'); } catch { setError('The browser could not copy the link.'); } }}>Copy link</Button><Button size="small" variant="outlined" onClick={() => void requestLink('regenerate')}>Regenerate</Button><Button size="small" variant="outlined" color="error" onClick={() => void requestLink('revoke')}>Revoke</Button></Box> : <Button variant="outlined" onClick={async () => { const result = await requestLink('ensure'); if (result) setConfirmation('Master link created successfully.'); }}>Create master link</Button>}
         {!details.phone && !details.email && <Alert severity="warning">Add a phone number or email address before sharing this recap.</Alert>}
@@ -238,7 +245,7 @@ return <>
 <LinearProgress variant="determinate" value={p.progress} sx={{ mt: 2, height: 8, borderRadius: 4 }}/>
 <Typography variant="caption">{p.progress}% of task load complete</Typography>
 </CardContent>
-</CardActionArea><Divider/><CardActions sx={{ flexWrap: 'wrap', gap: 0.5 }}><Button size="small" onClick={() => setRecapPerson(p)}>Recap</Button><Button size="small" onClick={() => void addToContacts(p)}>Add to contacts</Button></CardActions></Card>)}</Box>
+</CardActionArea><Divider/><CardActions sx={{ flexWrap: 'wrap', gap: 0.5 }}><Button size="small" onClick={event => { event.currentTarget.blur(); setRecapPerson(p); }}>Recap</Button><Button size="small" onClick={() => void addToContacts(p)}>Add to contacts</Button></CardActions></Card>)}</Box>
 <PersonRecapDialog person={recapPerson} onClose={() => setRecapPerson(null)}/>
 <Dialog open={open} onClose={() => !busy && setOpen(false)} fullWidth maxWidth="sm"><DialogTitle>Add person or contact</DialogTitle><DialogContent><Stack spacing={2} mt={1}><TextField autoFocus label="Full name" value={form.fullName} onChange={e => setForm(v => ({ ...v, fullName: e.target.value }))}/><TextField label="Email (optional)" type="email" value={form.email} onChange={e => setForm(v => ({ ...v, email: e.target.value }))}/><TextField label="Company" value={form.company} onChange={e => setForm(v => ({ ...v, company: e.target.value }))}/><TextField label="Function / role" value={form.role} onChange={e => setForm(v => ({ ...v, role: e.target.value }))}/><TextField label="Phone" value={form.phone} onChange={e => setForm(v => ({ ...v, phone: e.target.value }))}/><TextField multiline minRows={3} label="Notes" value={form.notes} onChange={e => setForm(v => ({ ...v, notes: e.target.value }))}/></Stack></DialogContent><DialogActions><Button disabled={busy} onClick={() => setOpen(false)}>Cancel</Button><Button variant="contained" disabled={busy || !form.fullName.trim()} onClick={async () => { setBusy(true); setError(''); try { await api('/people/save', { method: 'POST', body: { ...form, fullName: form.fullName.trim() } }); setForm({ fullName: '', email: '', company: '', role: '', phone: '', notes: '' }); setOpen(false); await load(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>{busy ? <CircularProgress size={20}/> : 'Add person'}</Button></DialogActions></Dialog>
 </>; }
@@ -251,6 +258,7 @@ function CalendarView({ onOpen, onNew }: {
     count: number;
     tasks: Task[];
 }>>([]); useEffect(() => { const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1), end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0); api<typeof days>(`/calendar?start=${start.toISOString().slice(0, 10)}&end=${end.toISOString().slice(0, 10)}`).then(setDays); }, [cursor]);
+const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 const cells = useMemo(() => { const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1), offset = (first.getDay() + 6) % 7, count = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate(); return [...Array(offset).fill(null), ...Array.from({ length: count }, (_, i) => { const date = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`; return days.find(d => d.date === date) || { date, severity: 'neutral', count: 0, tasks: [] }; })]; }, [cursor, days]);
 const day = days.find(d => d.date === selected);
 return <>
@@ -265,7 +273,7 @@ return <>
 </Stack>
 <Stack direction="row" gap={2} flexWrap="wrap" mb={2}>{[['red', 'Overdue or critical'], ['orange', 'High priority'], ['blue', 'Scheduled'], ['green', 'Completed only']].map(([c, l]) => <Typography variant="caption" key={c}>
 <span className={`legend ${c}`}/>{l}</Typography>)}</Stack>
-<Box className="calendar-grid">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(x => <Typography key={x} fontWeight={700} textAlign="center">{x}</Typography>)}{cells.map((d, i) => d ? <Card key={d.date} className={`calendar-day ${d.severity}`}>
+<Box className="calendar-grid">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(x => <Typography key={x} fontWeight={700} textAlign="center">{x}</Typography>)}{cells.map((d, i) => d ? <Card key={d.date} className={`calendar-day ${d.severity}${d.date === todayKey ? ' today' : ''}`}>
 <CardActionArea onClick={() => setSelected(d.date)}>
 <CardContent>
 <Typography fontWeight={700}>{Number(d.date.slice(-2))}</Typography>
@@ -302,11 +310,12 @@ const savePreferences=async(next:NotificationPreferences)=>{setPreferences(next)
 return <>
 <PageTitle title="Settings" subtitle="Notifications, email, timezone, and connected account."/>
 <Stack spacing={2}>
-<Card>
-<CardContent>
-<Typography variant="h6">Live notifications</Typography>
-<Typography color="text.secondary">iPhone requires iOS 16.4 or later and the PWA added to the Home Screen.</Typography>
-<Button sx={{ mt: 2 }} variant="contained" disabled={!supported || busy} onClick={async () => {
+	<Card>
+	<CardContent>
+	<Typography variant="h6">Live notifications</Typography>
+	<Typography color="text.secondary">iPhone requires iOS 16.4 or later and the PWA added to the Home Screen.</Typography>
+	<Stack direction={{xs:'column',sm:'row'}} spacing={1} mt={2} alignItems={{sm:'center'}}>
+	<Button variant="contained" disabled={!supported || busy || preferences.pushEnabled} onClick={async () => {
     setBusy(true);
     try {
         if(!import.meta.env.VITE_VAPID_PUBLIC_KEY)throw new Error('The Pages VAPID public key is missing.');
@@ -323,13 +332,22 @@ return <>
     }
     catch (error) { setMessage((error as Error).message); }
     finally { setBusy(false); }
-}}>Enable notifications</Button>
-<Button sx={{ mt: 2, ml: 1 }} variant="outlined" disabled={!supported || busy} onClick={async()=>{setBusy(true);try{const result=await api<{sent:number}>('/notifications/test-push',{method:'POST',body:{}});setMessage(`Test push sent to ${result.sent} device${result.sent===1?'':'s'}.`);await loadReadiness()}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}}>Send test push</Button>
-</CardContent>
-</Card>
-<Card>
-<CardContent>
-<Stack direction={{xs:'column',sm:'row'}} justifyContent="space-between" gap={1} mb={2}><Box><Typography variant="h6">Notification readiness</Typography><Typography color="text.secondary">Configuration and delivery evidence without exposing credentials.</Typography></Box><Button startIcon={<Refresh/>} onClick={()=>void loadReadiness()}>Refresh</Button></Stack>
+	}}>{preferences.pushEnabled ? 'Notifications enabled' : 'Enable notifications'}</Button>
+	<Button variant="outlined" disabled={!supported || busy || !preferences.pushEnabled} onClick={async()=>{setBusy(true);try{const result=await api<{sent:number}>('/notifications/test-push',{method:'POST',body:{}});setMessage(`Notification test sent to ${result.sent} device${result.sent===1?'':'s'}.`);await loadReadiness()}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}}>Send notification test</Button>
+	</Stack>
+	<Divider sx={{ my: 2 }}/>
+	<Typography variant="h6">Email reminders</Typography>
+	<Typography color="text.secondary">Reminder emails are sent to {session.get()?.user.email || 'the current signed-in email'}.</Typography>
+	<Stack direction={{xs:'column',sm:'row'}} spacing={1} mt={2} alignItems={{sm:'center'}}>
+	<Button variant="contained" disabled={busy || preferences.emailEnabled} onClick={async()=>{setBusy(true);try{await savePreferences({...preferences,emailEnabled:true});await loadReadiness();setMessage('Reminder emails enabled.')}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}}>{preferences.emailEnabled?'Reminder emails enabled':'Enable reminder emails'}</Button>
+	<Button variant="outlined" disabled={busy || !preferences.emailEnabled} onClick={async () => { setBusy(true); try { await api('/notifications/test-email', { method: 'POST', body: {} }); setMessage('Test email sent.'); } catch (error) { setMessage((error as Error).message); } finally { setBusy(false); } }}>Send email test</Button>
+	{preferences.emailEnabled && <Button color="inherit" size="small" disabled={busy} onClick={async()=>{setBusy(true);try{await savePreferences({...preferences,emailEnabled:false});await loadReadiness();setMessage('Reminder emails disabled.')}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}}>Disable reminder emails</Button>}
+	</Stack>
+	</CardContent>
+	</Card>
+	<Card>
+	<CardContent>
+	<Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} mb={2}><Box><Typography variant="h6">Notification readiness</Typography><Typography variant="body2" color="text.secondary">Configuration and delivery evidence.</Typography></Box><Button size="small" startIcon={<Refresh/>} onClick={()=>void loadReadiness()}>Refresh</Button></Stack>
 {!readiness?<LinearProgress/>:<Stack spacing={1.25}>
 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
 <Chip color={readiness.email.providerConfigured&&readiness.email.accountAddressAvailable?'success':'error'} label={`Email provider ${readiness.email.providerConfigured?'configured':'missing'}`}/>
@@ -342,16 +360,8 @@ return <>
 {readiness.deliveries.latest&&<Typography variant="caption" color="text.secondary">Latest delivery: {readiness.deliveries.latest.status} · {new Date(readiness.deliveries.latest.createdAt).toLocaleString()}{readiness.deliveries.latest.errorCode?` · ${readiness.deliveries.latest.errorCode}`:''}</Typography>}
 <Alert severity="info">Due-today, overdue, and daily-summary automation are not active yet. This version sends explicit task reminders configured in the task editor.</Alert>
 </Stack>}
-</CardContent>
-</Card>
-<Card>
-<CardContent>
-<Typography variant="h6">Email reminders</Typography>
-<Typography color="text.secondary">Reminder emails are sent to the email address used for this account: {session.get()?.user.email || 'current signed-in email'}.</Typography>
-<FormControlLabel control={<Switch checked={preferences.emailEnabled} disabled={busy} onChange={async event=>{setBusy(true);try{await savePreferences({...preferences,emailEnabled:event.target.checked});await loadReadiness();setMessage(event.target.checked?'Email reminders enabled.':'Email reminders disabled.')}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}}/>} label="Send reminder emails"/>
-<Button disabled={busy} onClick={async () => { setBusy(true); try { await api('/notifications/test-email', { method: 'POST', body: {} }); setMessage('Test email sent.'); } catch (error) { setMessage((error as Error).message); } finally { setBusy(false); } }}>Send test email</Button>
-</CardContent>
-</Card>
+	</CardContent>
+	</Card>
 <Card>
 <CardContent>
 <Typography variant="h6">Workspace currency</Typography>
@@ -379,9 +389,9 @@ export default function App() { const [logged, setLogged] = useState(!!session.g
 const mobile = useMediaQuery('(max-width:800px)'); useEffect(()=>{void consumeAuthLink().then(mode=>{if(mode){setLogged(true);setAuthMode(mode)}})},[]); useEffect(()=>{if(logged)void api<{platformAdmin:boolean}>('/access/state').then(state=>setPlatformAdmin(state.platformAdmin)).catch(()=>setPlatformAdmin(false))},[logged]); useEffect(() => { if (!logged) return; const params = new URLSearchParams(location.search), token = params.get('claimProject'); if (!token) return; void api('/people/claim-linked-project', { method: 'POST', body: { token } }).then(() => { sessionStorage.setItem('linked-project-claim-message', 'Project linked to your Task Tracker account.'); setView('projects'); history.replaceState(null, '', '?view=projects'); }).catch(error => { sessionStorage.setItem('linked-project-claim-message', (error as Error).message); setView('projects'); history.replaceState(null, '', '?view=projects'); }); }, [logged]); useEffect(() => { const online = () => { setOffline(false); void flushQueue(); };
 const off = () => setOffline(true); addEventListener('online', online); addEventListener('offline', off);
 const focus = () => document.visibilityState === 'visible' && navigator.onLine && void flushQueue(); document.addEventListener('visibilitychange', focus); return () => { removeEventListener('online', online); removeEventListener('offline', off); document.removeEventListener('visibilitychange', focus); }; }, []);
-const theme = useMemo(() => createTheme({ palette: { mode: dark ? 'dark' : 'light', primary: { main: dark ? '#60a5fa' : '#1d4ed8', contrastText: dark ? '#07111f' : '#fff' }, background: { default: dark ? '#0c1220' : '#f4f7fb', paper: dark ? '#151d2e' : '#fff' } }, shape: { borderRadius: 12 }, typography: { fontFamily: 'Inter,Segoe UI,Arial,sans-serif', h4: { fontWeight: 800 }, h6: { fontWeight: 750 } }, components: { MuiButton: { defaultProps: { disableElevation: true }, styleOverrides: { outlined: { borderColor: dark ? '#64748b' : undefined } } }, MuiCard: { styleOverrides: { root: { border: '1px solid', borderColor: dark ? '#475569' : '#d5dde8' } } }, MuiOutlinedInput: { styleOverrides: { root: { '& .MuiOutlinedInput-notchedOutline': { borderColor: dark ? '#64748b' : '#94a3b8' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: dark ? '#93c5fd' : '#1d4ed8' } } } }, MuiToggleButton: { styleOverrides: { root: { borderColor: dark ? '#64748b' : '#94a3b8', '&.Mui-selected': { backgroundColor: dark ? '#334155' : '#dbeafe', color: dark ? '#fff' : '#1e3a8a' } } } } } }), [dark]); if(location.pathname === '/shared-tasks')return <PublicPersonTasks/>; if(authMode)return <ThemeProvider theme={theme}><CssBaseline/><PasswordSetup mode={authMode} onDone={()=>{setAuthMode(null);setView('dashboard')}}/></ThemeProvider>; if (!logged)
+const theme = useMemo(() => createTheme({ palette: { mode: dark ? 'dark' : 'light', primary: { main: dark ? '#60a5fa' : '#1d4ed8', contrastText: dark ? '#07111f' : '#fff' }, background: { default: dark ? '#0c1220' : '#f4f7fb', paper: dark ? '#151d2e' : '#fff' } }, shape: { borderRadius: 12 }, typography: { fontFamily: 'Inter,Segoe UI,Arial,sans-serif', h4: { fontWeight: 800 }, h6: { fontWeight: 750 } }, components: { MuiButton: { defaultProps: { disableElevation: true }, styleOverrides: { root: { minHeight: 38, fontWeight: 700, textTransform: 'none' }, outlined: { borderColor: dark ? '#64748b' : undefined } } }, MuiCard: { styleOverrides: { root: { border: '1px solid', borderColor: dark ? '#475569' : '#d5dde8' } } }, MuiOutlinedInput: { styleOverrides: { root: { '& .MuiOutlinedInput-notchedOutline': { borderColor: dark ? '#64748b' : '#94a3b8' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: dark ? '#93c5fd' : '#1d4ed8' } } } }, MuiToggleButton: { styleOverrides: { root: { borderColor: dark ? '#64748b' : '#94a3b8', '&.Mui-selected': { backgroundColor: dark ? '#334155' : '#dbeafe', color: dark ? '#fff' : '#1e3a8a' } } } } } }), [dark]); if(location.pathname === '/shared-tasks')return <PublicPersonTasks/>; if(authMode)return <ThemeProvider theme={theme}><CssBaseline/><PasswordSetup mode={authMode} onDone={()=>{setAuthMode(null);setView('dashboard')}}/></ThemeProvider>; if (!logged)
     return <ThemeProvider theme={theme}><CssBaseline/>
-<Login />
+	<Login onSignedIn={() => setLogged(true)} />
 </ThemeProvider>;
 const releaseFocus = () => (document.activeElement as HTMLElement | null)?.blur();
 const openTask = (nextTask: Task) => { releaseFocus(); setTask(nextTask); };

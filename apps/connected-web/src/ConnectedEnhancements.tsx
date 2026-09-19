@@ -243,11 +243,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
               Cards
             </ToggleButton>
           </ToggleButtonGroup>
-          <Tooltip title="Refresh tasks">
-            <IconButton aria-label="Refresh tasks" onClick={load}>
-              <Refresh />
-            </IconButton>
-          </Tooltip>
+          <Button startIcon={<Refresh />} aria-label="Refresh tasks" onClick={load}>Refresh</Button>
         </Stack>
       </Paper>
       {error && (
