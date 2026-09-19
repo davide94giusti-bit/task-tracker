@@ -1,31 +1,54 @@
 name: CI
+
 on:
   pull_request:
   push:
     branches: [main]
+
 permissions:
   contents: read
+  pull-requests: write
+
 jobs:
   verify:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: {node-version: 22, cache: npm}
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
       - run: npm ci
       - run: npm run verify
       - run: npm run build:connected
       - run: npm audit --omit=dev --audit-level=high
+
       - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   windows:
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: {node-version: 22, cache: npm}
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
       - run: npm ci
       - run: npm run build:local
       - run: npx electron-builder --win portable --x64
+
       - uses: actions/upload-artifact@v4
-        with: {name: task-tracker-local-windows-x64, path: release/*Portable.exe}
+        with:
+          name: task-tracker-local-windows-x64
+          path: release/*Portable.exe
