@@ -38,6 +38,11 @@ body,
 .calendar-day {
   min-height: 112px;
 }
+.calendar-day.today {
+  outline: 2px solid #39ff88;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px rgba(57, 255, 136, 0.75), 0 0 14px rgba(57, 255, 136, 0.55);
+}
 .calendar-day .MuiCardActionArea-root {
   height: 100%;
 }
