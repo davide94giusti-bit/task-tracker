@@ -426,9 +426,10 @@ create or replace function public_manage_project_person(p_share_id uuid,p_action
 returns jsonb language plpgsql security definer set search_path=public as $$
 declare v_share person_task_shares; v_actor text; v_person people; v_link project_people;
 begin
-  select s,p.full_name into v_share,v_actor from person_task_shares s join people p on p.id=s.person_id
+  select s.* into v_share from person_task_shares s join people p on p.id=s.person_id
     where s.id=p_share_id and s.revoked_at is null and s.scope_mode='project' and s.allow_manage_project_contacts
       and (s.expires_at is null or s.expires_at>now());
+  select p.full_name into v_actor from people p where p.id=v_share.person_id;
   if v_share.id is null then raise exception 'Managing project contacts is not permitted'; end if;
   if p_action='remove' then
     update project_people set deleted_at=now(),updated_at=now()
