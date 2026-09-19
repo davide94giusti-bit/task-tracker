@@ -41,8 +41,13 @@ create table if not exists project_people (
 create index if not exists idx_project_people_project on project_people(project_id) where deleted_at is null;
 alter table project_people enable row level security;
 drop policy if exists project_people_workspace on project_people;
-create policy project_people_workspace on project_people for all
-  using (workspace_id=current_workspace_id()) with check (workspace_id=current_workspace_id());
+drop policy if exists project_people_read on project_people;
+drop policy if exists project_people_write on project_people;
+create policy project_people_read on project_people for select
+  using (public.is_workspace_member(workspace_id));
+create policy project_people_write on project_people for all
+  using (public.workspace_role_for(workspace_id) in ('owner','admin','member'))
+  with check (public.workspace_role_for(workspace_id) in ('owner','admin','member'));
 
 create or replace function validate_project_person_workspace()
 returns trigger language plpgsql set search_path=public as $$
@@ -71,7 +76,7 @@ create index if not exists idx_person_share_actions_share_created on person_shar
 alter table person_share_actions enable row level security;
 drop policy if exists person_share_actions_workspace on person_share_actions;
 create policy person_share_actions_workspace on person_share_actions
-  for select using (workspace_id = current_workspace_id());
+  for select using (public.is_workspace_member(workspace_id));
 
 create table if not exists linked_project_collaborators (
   id uuid primary key default gen_random_uuid(),
@@ -90,7 +95,7 @@ create index if not exists idx_linked_project_collaborators_user on linked_proje
 alter table linked_project_collaborators enable row level security;
 drop policy if exists linked_project_collaborators_access on linked_project_collaborators;
 create policy linked_project_collaborators_access on linked_project_collaborators for select
-  using (workspace_id=current_workspace_id() or user_id=auth.uid());
+  using (public.is_workspace_member(workspace_id) or user_id=auth.uid());
 
 create or replace function person_share_task_allowed(p_share_id uuid, p_task_id uuid, p_action text default 'view')
 returns boolean language sql stable security definer set search_path=public as $$

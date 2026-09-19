@@ -1,9 +1,17 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PersonShareChecklistUpdate, PersonShareComment, PersonShareConfigure, PersonShareProjectPersonMutation, PersonShareTaskComplete, ProjectDelete, ProjectPersonRemove, ProjectPersonSave, ProjectWrite } from '../../packages/connected-contracts';
 
 const uuid = (suffix: string) => `00000000-0000-4000-8000-${suffix.padStart(12, '0')}`;
 
 describe('v16.13 collaboration contracts', () => {
+  it('uses existing workspace membership helpers in collaboration RLS policies', () => {
+    const migration = readFileSync('supabase/migrations/0011_verified_project_collaboration.sql', 'utf8');
+    expect(migration).not.toContain('current_workspace_id()');
+    expect(migration).toContain('public.is_workspace_member(workspace_id)');
+    expect(migration).toContain("public.workspace_role_for(workspace_id) in ('owner','admin','member')");
+  });
+
   it('requires a project when project-wide access is selected', () => {
     const base = { personId: uuid('1'), action: 'configure' as const, allowChecklistUpdates: true, allowTaskCompletion: true, allowComments: false, expiresAt: null };
     expect(PersonShareConfigure.safeParse({ ...base, scopeMode: 'project', projectId: null }).success).toBe(false);
