@@ -56,4 +56,12 @@ describe('v16.13 collaboration contracts', () => {
     expect(PersonShareProjectPersonMutation.safeParse({ action: 'remove', personId: uuid('10'), deleteFromPeople: true }).success).toBe(false);
     expect(PersonShareProjectPersonMutation.safeParse({ action: 'update', personId: uuid('10'), fullName: '' }).success).toBe(false);
   });
+
+  it('makes pgcrypto available to verification and account-deletion functions', () => {
+    const migration = readFileSync('supabase/migrations/0014_fix_pgcrypto_function_search_path.sql', 'utf8');
+    expect(migration).toContain("where extension.extname = 'pgcrypto'");
+    expect(migration).toContain('set_person_share_verification_code(uuid,text) set search_path');
+    expect(migration).toContain('verify_person_share_code(uuid,text) set search_path');
+    expect(migration).toContain('prepare_connected_account_deletion(uuid,uuid) set search_path');
+  });
 });

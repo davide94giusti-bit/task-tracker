@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const read = (path: string) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 
@@ -51,6 +51,15 @@ describe('v16 usability and reliability', () => {
     expect(manual).toContain('<Accordion');
     expect(manual).toContain('Checklist or separate task?');
     expect(manual).toContain('another person is accountable');
+  });
+
+  it('uses chapter-specific manual screenshots and annotation coordinates', () => {
+    const screenshots = ['navigation.png', 'dashboard.png', 'tasks.png', 'task-editor.png', 'checklist.png', 'dependencies.png', 'projects.png', 'people.png', 'settings.png', 'access.png', 'diagnostics.png'];
+    screenshots.forEach((screenshot) => expect(existsSync(`apps/connected-web/public/manual/${screenshot}`)).toBe(true));
+    expect(manual).not.toContain('18 + point * 27');
+    expect(manual).not.toContain('12 + point * 30');
+    expect(manual).toContain('x: 82, y: 4');
+    expect(manual).toContain('x: 84, y: 17');
   });
 
   it('groups the mobile More menu into collapsible macro areas', () => {
