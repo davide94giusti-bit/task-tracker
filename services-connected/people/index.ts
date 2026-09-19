@@ -200,6 +200,8 @@ export default <WorkerHandler<Env>>{
               p_allow_supervise_contact_checklists: configured.allowSuperviseContactChecklists,
               p_allow_complete_contact_tasks: configured.allowCompleteContactTasks,
               p_allow_manage_project_contacts: configured.allowManageProjectContacts,
+              p_allow_create_edit_tasks: configured.allowCreateEditTasks,
+              p_allow_manage_checklist_items: configured.allowManageChecklistItems,
               p_expires_at: configured.expiresAt,
             } }),
           });
@@ -234,6 +236,8 @@ export default <WorkerHandler<Env>>{
           allowSuperviseContactChecklists: Boolean(share.allowSuperviseContactChecklists),
           allowCompleteContactTasks: Boolean(share.allowCompleteContactTasks),
           allowManageProjectContacts: Boolean(share.allowManageProjectContacts),
+          allowCreateEditTasks: Boolean(share.allowCreateEditTasks),
+          allowManageChecklistItems: Boolean(share.allowManageChecklistItems),
           expiresAt: share.expiresAt || null,
         }, 200, requestId);
       }

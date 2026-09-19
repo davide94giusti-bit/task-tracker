@@ -191,6 +191,8 @@ export const PersonShareConfigure = z.object({
   allowSuperviseContactChecklists: z.boolean().default(false),
   allowCompleteContactTasks: z.boolean().default(false),
   allowManageProjectContacts: z.boolean().default(false),
+  allowCreateEditTasks: z.boolean().default(false),
+  allowManageChecklistItems: z.boolean().default(false),
   expiresAt: z.string().datetime({ offset: true }).nullable(),
 }).strict().refine(value => value.scopeMode !== "project" || Boolean(value.projectId), {
   message: "A project is required for project collaboration",
@@ -223,6 +225,40 @@ export const PersonShareTaskComplete = z.object({
   taskId: Uuid, expectedVersion: z.number().int().positive().optional(),
 }).strict();
 export const PersonShareComment = z.object({ taskId: Uuid, comment: z.string().trim().min(1).max(2000) }).strict();
+const SharedTaskEditableFields = z.object({
+  title: z.string().trim().min(1).max(500),
+  description: z.string().max(50_000).default(""),
+  status: z.enum(["not_started", "in_progress", "waiting", "blocked"]).default("not_started"),
+  priority: Priority.default("medium"),
+  dueDate: IsoDate.nullable().optional(),
+});
+export const PersonShareTaskMutation = z.discriminatedUnion("action", [
+  SharedTaskEditableFields.extend({ action: z.literal("create") }).strict(),
+  SharedTaskEditableFields.extend({
+    action: z.literal("update"),
+    taskId: Uuid,
+    expectedVersion: z.number().int().positive(),
+  }).strict(),
+]);
+export const PersonShareChecklistMutation = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("create"), taskId: Uuid,
+    description: z.string().trim().min(1).max(1000), required: z.boolean().default(true),
+  }).strict(),
+  z.object({
+    action: z.literal("update"), taskId: Uuid, itemId: Uuid,
+    description: z.string().trim().min(1).max(1000), required: z.boolean(),
+    expectedVersion: z.number().int().positive(),
+  }).strict(),
+  z.object({
+    action: z.literal("remove"), taskId: Uuid, itemId: Uuid,
+    expectedVersion: z.number().int().positive(),
+  }).strict(),
+  z.object({
+    action: z.literal("reorder"), taskId: Uuid,
+    orderedItemIds: z.array(Uuid).min(1).max(500),
+  }).strict(),
+]);
 const SharedProjectPersonFields = z.object({
   fullName: z.string().trim().min(1).max(300), role: z.string().trim().max(300).default(""),
   company: z.string().trim().max(300).default(""), phone: z.string().trim().max(100).default(""),
