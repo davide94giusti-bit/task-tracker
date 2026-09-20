@@ -13,6 +13,15 @@ describe('connected UI completeness',()=>{
     expect(gateway).toContain('/^\\/v1\\/projects\\/save$/');
   });
 
+  it('explains project-person linking and keeps mobile creation dialogs readable',()=>{
+    expect(app).toContain('What linking a person does');
+    expect(app).toContain('It does not assign tasks, create a login');
+    expect(app).toContain('Collaborator visibility');
+    expect(app).toContain('Creating a project does not create tasks or add people automatically');
+    expect(app).toContain('Adding someone here does not create a Task Tracker account');
+    expect(app).toContain('fullScreen={mobile}');
+  });
+
   it('supports navigation and section collapse',()=>{
     expect(app).toContain('setDesktopNav(value => !value)');
     expect(app).toContain('setCollapsedGroups(value =>');
@@ -33,6 +42,11 @@ describe('connected UI completeness',()=>{
     expect(styles).toContain('.calendar-count {');
     expect(styles).toContain('transform: translateX(-50%)');
     expect(app).not.toContain('`${d.count} task${d.count === 1');
+  });
+
+  it('reloads the calendar after a task is saved',()=>{
+    expect(app).toContain('<CalendarView onOpen={openTask} onNew={openNewTask} refreshToken={refreshToken}/>');
+    expect(app).toContain('[cursor, refreshToken]');
   });
 
   it('provides table cards drilldowns progress and real task detail controls',()=>{
@@ -67,10 +81,13 @@ describe('connected filters and notification persistence',()=>{
 
   it('updates an existing browser push subscription instead of duplicating it',()=>{
     const notifications=read('services-connected/notifications/index.ts');
+    const app=read('apps/connected-web/src/App.tsx');
     expect(notifications).toContain('method: existing ? "patch" : "post"');
     expect(notifications).toContain('`test-${context.userId}-${crypto.randomUUID()}`');
     expect(notifications).toContain('email_enabled: input.emailEnabled');
     expect(notifications).toContain('push_enabled: input.pushEnabled');
+    expect(app).toContain('Disable notifications');
+    expect(app).toContain("savePreferences({...preferences,pushEnabled:false})");
   });
 
   it('normalizes a missing browser push expiration time',()=>{
