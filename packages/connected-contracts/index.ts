@@ -20,6 +20,7 @@ export const MoneyAmount = z
   .nonnegative()
   .max(999_999_999_999.99)
   .nullable();
+export const ReminderRepeat = z.enum(["none", "daily", "weekly", "monthly"]);
 
 export const ApiError = z.object({
   code: z.string(),
@@ -52,8 +53,12 @@ export const TaskWrite = z.object({
   dueDate: IsoDate.nullable().optional(),
   dueTime: z.string().nullable().optional(),
   reminderAt: z.string().datetime({ offset: true }).nullable().optional(),
+  reminderRepeat: ReminderRepeat.default("none"),
+  reminderRepeatInterval: z.number().int().min(1).max(365).default(1),
   recurrence: z.record(z.string(), z.unknown()).nullable().optional(),
   costAmount: MoneyAmount.optional(),
+  costDate: IsoDate.nullable().optional(),
+  completeWhenChecklistDone: z.boolean().default(false),
   expectedVersion: z.number().int().positive().optional(),
   idempotencyKey: z.string().uuid().optional(),
 });
@@ -107,6 +112,7 @@ export const ChecklistWrite = z.object({
   required: z.boolean().default(true),
   position: z.number().int().nonnegative().default(0),
   costAmount: MoneyAmount.optional(),
+  dueDate: IsoDate.nullable().optional(),
 });
 export const CostQuery = z
   .object({
@@ -176,7 +182,9 @@ export const EmailAddress = z
   .transform((value) => value.toLowerCase());
 export const InvitationCreate = z.object({ email: EmailAddress }).strict();
 export const InvitationAction = z.object({ invitationId: Uuid }).strict();
-export const InvitationAccept = z.object({}).strict();
+export const InvitationAccept = z.object({
+  displayName: z.string().trim().min(2).max(80),
+}).strict();
 export const UserAccessAction = z.object({ userId: Uuid }).strict();
 export const PersonShareConfigure = z.object({
   personId: Uuid,
@@ -244,10 +252,12 @@ export const PersonShareChecklistMutation = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("create"), taskId: Uuid,
     description: z.string().trim().min(1).max(1000), required: z.boolean().default(true),
+    dueDate: IsoDate.nullable().optional(),
   }).strict(),
   z.object({
     action: z.literal("update"), taskId: Uuid, itemId: Uuid,
     description: z.string().trim().min(1).max(1000), required: z.boolean(),
+    dueDate: IsoDate.nullable().optional(),
     expectedVersion: z.number().int().positive(),
   }).strict(),
   z.object({
@@ -296,6 +306,7 @@ export const IdentityState = z.object({
   workspaceId: Uuid.optional(),
   role: Role.optional(),
   platformAdmin: z.boolean(),
+  displayName: z.string().default(""),
   requiresPasswordSetup: z.boolean().default(false),
 });
 export const InviteRecord = z.object({
