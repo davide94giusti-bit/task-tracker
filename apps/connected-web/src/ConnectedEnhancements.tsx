@@ -363,13 +363,16 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
 }
 
 function CostAnalyticsCard({ onOpenTask, refreshToken = 0 }: { onOpenTask: (task: Task) => void; refreshToken?: number }) {
-  const currentYear = new Date().getFullYear(),
+  const now = new Date(),
+    currentYear = now.getFullYear(),
+    currentSixMonthWindow = now.getMonth() < 6 ? 0 : 1,
     [year, setYear] = useState(String(currentYear)),
     [month, setMonth] = useState(''),
     [compareYear, setCompareYear] = useState(''),
     [data, setData] = useState<CostSummary | null>(null),
     [error, setError] = useState(''),
-    [drilldown, setDrilldown] = useState<{ title: string; entries: CostEntry[] } | null>(null);
+    [drilldown, setDrilldown] = useState<{ title: string; entries: CostEntry[] } | null>(null),
+    graphScrollRef = useRef<HTMLDivElement | null>(null);
   const load = useCallback(() => {
     const query = new URLSearchParams();
     if (year !== 'all') query.set('year', year);
@@ -391,6 +394,15 @@ function CostAnalyticsCard({ onOpenTask, refreshToken = 0 }: { onOpenTask: (task
   useEffect(() => {
     if (compareYear && !comparisonYears.includes(Number(compareYear))) setCompareYear('');
   }, [year, data?.availableYears.join(','), compareYear]);
+  useEffect(() => {
+    if (!data || year === 'all' || month) return;
+    const frame = requestAnimationFrame(() => {
+      const graph = graphScrollRef.current;
+      if (!graph) return;
+      graph.scrollLeft = currentSixMonthWindow === 0 ? 0 : graph.scrollWidth - graph.clientWidth;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [year, month, data?.selectedYear, currentSixMonthWindow]);
   const openEntries = (title: string, predicate: (entry: CostEntry) => boolean = () => true) => {
     setDrilldown({ title, entries: (data?.entries || []).filter(predicate) });
   };
@@ -426,16 +438,18 @@ function CostAnalyticsCard({ onOpenTask, refreshToken = 0 }: { onOpenTask: (task
             <Box className="metric-grid">
               {[['Past / incurred', data.totals.past, 'past'], ['Future / planned', data.totals.future, 'future'], ['Total', data.totals.total, 'all']].map(([label, value, timing]) => <Card key={String(label)} variant="outlined"><CardActionArea onClick={() => openEntries(String(label), (entry) => timing === 'all' || entry.timing === timing)}><CardContent><Typography color="text.secondary">{label}</Typography><Typography variant="h5">{money(Number(value))}</Typography></CardContent></CardActionArea></Card>)}
             </Box>
-            {year !== 'all' && !month && <Box sx={{ mt: 3, overflowX: 'auto', pb: 1 }}>
-              <Stack direction="row" spacing={1} alignItems="flex-end" sx={{ minWidth: 720, height: 220 }}>
-                {data.monthly.map((item) => <Box component="button" type="button" key={item.month} onClick={() => openEntries(`${monthLabel(item.month)} ${year}`, (entry) => !!entry.date && Number(entry.date.slice(5, 7)) === item.month)} sx={{ border: 0, bgcolor: 'transparent', color: 'inherit', cursor: 'pointer', flex: 1, height: '100%', p: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                  <Stack direction="row" spacing={0.4} alignItems="flex-end" justifyContent="center" flex={1} width="100%">
-                    <Box title={`${year}: ${money(item.total)}`} sx={{ width: compareYear ? '34%' : '55%', minHeight: item.total ? 4 : 0, height: `${item.total / graphMaximum * 100}%`, maxHeight: '170px', bgcolor: 'primary.main', borderRadius: '5px 5px 0 0' }} />
-                    {item.compareTotal !== undefined && <Box title={`${compareYear}: ${money(item.compareTotal)}`} onClick={(event) => { event.stopPropagation(); setDrilldown({ title: `${monthLabel(item.month)} ${compareYear}`, entries: data.comparisonEntries.filter((entry) => !!entry.date && Number(entry.date.slice(5, 7)) === item.month) }); }} sx={{ width: '34%', minHeight: item.compareTotal ? 4 : 0, height: `${item.compareTotal / graphMaximum * 100}%`, maxHeight: '170px', bgcolor: 'secondary.main', borderRadius: '5px 5px 0 0' }} />}
-                  </Stack>
-                  <Typography variant="caption" textAlign="center" mt={0.5}>{monthLabel(item.month)}</Typography>
-                </Box>)}
-              </Stack>
+            {year !== 'all' && !month && <Box sx={{ mt: 3 }}>
+              <Box ref={graphScrollRef} aria-label="Monthly cost chart. Scroll horizontally to see other months." sx={{ overflowX: 'auto', overscrollBehaviorX: 'contain', scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch', pb: 1 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(12,minmax(0,1fr))', columnGap: 1, alignItems: 'end', width: '200%', minWidth: 600, height: 220 }}>
+                  {data.monthly.map((item) => <Box component="button" type="button" key={item.month} onClick={() => openEntries(`${monthLabel(item.month)} ${year}`, (entry) => !!entry.date && Number(entry.date.slice(5, 7)) === item.month)} sx={{ border: 0, bgcolor: 'transparent', color: 'inherit', cursor: 'pointer', minWidth: 0, height: '100%', p: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', scrollSnapAlign: item.month === 1 || item.month === 7 ? 'start' : 'none' }}>
+                    <Stack direction="row" spacing={0.4} alignItems="flex-end" justifyContent="center" flex={1} width="100%">
+                      <Box title={`${year}: ${money(item.total)}`} sx={{ width: compareYear ? '34%' : '55%', minHeight: item.total ? 4 : 0, height: `${item.total / graphMaximum * 100}%`, maxHeight: '170px', bgcolor: 'primary.main', borderRadius: '5px 5px 0 0' }} />
+                      {item.compareTotal !== undefined && <Box title={`${compareYear}: ${money(item.compareTotal)}`} onClick={(event) => { event.stopPropagation(); setDrilldown({ title: `${monthLabel(item.month)} ${compareYear}`, entries: data.comparisonEntries.filter((entry) => !!entry.date && Number(entry.date.slice(5, 7)) === item.month) }); }} sx={{ width: '34%', minHeight: item.compareTotal ? 4 : 0, height: `${item.compareTotal / graphMaximum * 100}%`, maxHeight: '170px', bgcolor: 'secondary.main', borderRadius: '5px 5px 0 0' }} />}
+                    </Stack>
+                    <Typography variant="caption" textAlign="center" mt={0.5}>{monthLabel(item.month)}</Typography>
+                  </Box>)}
+                </Box>
+              </Box>
               <Stack direction="row" spacing={2} mt={1}><Typography variant="caption"><Box component="span" sx={{ display: 'inline-block', width: 10, height: 10, bgcolor: 'primary.main', mr: 0.5 }} />{year}</Typography>{data.compareYear && <Typography variant="caption"><Box component="span" sx={{ display: 'inline-block', width: 10, height: 10, bgcolor: 'secondary.main', mr: 0.5 }} />{data.compareYear}</Typography>}</Stack>
             </Box>}
             <Typography variant="h6" mt={3} mb={1}>Cost by project</Typography>
