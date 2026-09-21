@@ -1,5 +1,6 @@
 import {
   AccountDeletionRequest,
+  DisplayNameUpdate,
   InvitationAccept,
   InvitationAction,
   InvitationCreate,
@@ -120,6 +121,12 @@ export default <WorkerHandler<Env>>{
               .filter(Boolean),
           });
           await audit(env, context, "invitation.accepted", result.workspaceId);
+          return json(result, 200, requestId);
+        }
+        if (url.pathname === "/profile") {
+          const input = DisplayNameUpdate.parse(await body(request));
+          const result = await data(env, "/identity/profile", context, input);
+          await audit(env, context, "profile.display_name_updated", context.userId);
           return json(result, 200, requestId);
         }
         if (url.pathname === "/invitations") {

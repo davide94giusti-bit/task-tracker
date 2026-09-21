@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Accordion, AccordionDetails, AccordionSummary, Alert, AppBar, Avatar, BottomNavigation, BottomNavigationAction, Box, Button, Card, CardActionArea, CardActions, CardContent, Chip, CircularProgress, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, LinearProgress, List, ListItemButton, ListItemIcon, ListItemText, MenuItem, Paper, Snackbar, Stack, Switch, TextField, ThemeProvider, Toolbar, Tooltip, Typography, createTheme, useMediaQuery } from '@mui/material';
+import { Accordion, AccordionDetails, AccordionSummary, Alert, AppBar, Avatar, BottomNavigation, BottomNavigationAction, Box, Button, Card, CardActionArea, CardActions, CardContent, Chip, CircularProgress, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, LinearProgress, List, ListItemButton, ListItemIcon, ListItemText, MenuItem, Paper, Snackbar, Stack, Switch, ThemeProvider, Toolbar, Tooltip, Typography, createTheme, useMediaQuery } from '@mui/material';
 import { Add, CalendarMonth, CheckCircle, CloudDone, Dashboard as DashboardIcon, DarkMode, Delete, Edit, Event, ExpandLess, ExpandMore, Folder, Groups, Inbox, InfoOutlined, LightMode, Logout, Menu, MenuBook, MoreHoriz, Notifications, People, Refresh, Security, Settings, TaskAlt, Today } from '@mui/icons-material';
 import { api, flushQueue } from './api';
 import { consumeAuthLink, resetPassword, session, signIn } from './auth';
 import { AccountSecurity, PasswordSetup, UsersAccessView } from './AccessViews';
+import { AccessibleTextField as TextField } from './AccessibleTextField';
 import { BackupImportView, DiagnosticsView } from './BackupDiagnosticsViews';
 import { EnhancedDashboardView, EnhancedTasksView, NotificationBell, TaskDetailsDialog, TaskEditorDialog } from './ConnectedEnhancements';
 import { DependencyLoadView } from './OperationalViews';

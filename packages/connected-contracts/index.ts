@@ -185,6 +185,9 @@ export const InvitationAction = z.object({ invitationId: Uuid }).strict();
 export const InvitationAccept = z.object({
   displayName: z.string().trim().min(2).max(80),
 }).strict();
+export const DisplayNameUpdate = z.object({
+  displayName: z.string().trim().min(2).max(80),
+}).strict();
 export const UserAccessAction = z.object({ userId: Uuid }).strict();
 export const PersonShareConfigure = z.object({
   personId: Uuid,

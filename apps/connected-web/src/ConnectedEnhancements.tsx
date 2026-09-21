@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
+import { Alert, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { Add, ArrowBack, AttachFile, Call, CheckCircle, Close, Delete, Edit, Email, Link as LinkIcon, NotificationsActive, OpenInNew, Person as PersonIcon, Refresh, TableRows, ViewModule, WhatsApp } from '@mui/icons-material';
 import { api } from './api';
+import { AccessibleTextField as TextField } from './AccessibleTextField';
 import type { ChecklistItem, CostEntry, CostSummary, Dashboard, NotificationItem, Person, Project, Task, TaskAttachment, TaskDependency, View } from './types';
 
 function titleFor(view: View, override?: string) {
@@ -843,9 +844,13 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, on
           priority: shownTask.priority,
           dueDate: shownTask.dueDate || null,
           reminderAt: shownTask.reminderAt || null,
+          reminderRepeat: shownTask.reminderRepeat || 'none',
+          reminderRepeatInterval: shownTask.reminderRepeatInterval || 1,
           projectId: shownTask.projectId || null,
           responsiblePersonId: shownTask.responsiblePersonId || null,
           costAmount: shownTask.costAmount ?? null,
+          costDate: shownTask.costDate || null,
+          completeWhenChecklistDone: Boolean(shownTask.completeWhenChecklistDone),
           expectedVersion: shownTask.version
         }
       });
@@ -1054,21 +1059,22 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
   useEffect(() => {
     if (!open) return;
     createdTaskId.current = task?.id || null;
-    setEditor({
-      title: task?.title || '',
-      description: task?.description || '',
-      status: task?.status || 'not_started',
-      priority: task?.priority || 'medium',
-      dueDate: newDate || task?.dueDate || '',
-      reminderAt: reminderInputValue(task?.reminderAt),
-      reminderRepeat: task?.reminderRepeat || 'none',
-      reminderRepeatInterval: String(task?.reminderRepeatInterval || 1),
-      projectId: task?.projectId || '',
-      responsiblePersonId: task?.responsiblePersonId || '',
-      costAmount: task?.costAmount === null || task?.costAmount === undefined ? '' : String(task.costAmount),
-      costDate: task?.costDate || '',
-      completeWhenChecklistDone: Boolean(task?.completeWhenChecklistDone)
+    const applyTask = (current: Task | null) => setEditor({
+      title: current?.title || '',
+      description: current?.description || '',
+      status: current?.status || 'not_started',
+      priority: current?.priority || 'medium',
+      dueDate: newDate || current?.dueDate || '',
+      reminderAt: reminderInputValue(current?.reminderAt),
+      reminderRepeat: current?.reminderRepeat || 'none',
+      reminderRepeatInterval: String(current?.reminderRepeatInterval || 1),
+      projectId: current?.projectId || '',
+      responsiblePersonId: current?.responsiblePersonId || '',
+      costAmount: current?.costAmount === null || current?.costAmount === undefined ? '' : String(current.costAmount),
+      costDate: current?.costDate || '',
+      completeWhenChecklistDone: Boolean(current?.completeWhenChecklistDone)
     });
+    applyTask(task);
     setChecklist([]);
     setDependencies([]);
     setDeletedChecklist([]);
@@ -1087,10 +1093,12 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
     });
     if (task)
       api<{
+        task: Task;
         checklist: ChecklistItem[];
         dependencies: Omit<TaskDependency, 'prerequisiteTitle' | 'prerequisiteStatus'>[];
       }>(`/tasks/details?taskId=${task.id}`)
         .then((details) => {
+          applyTask(details.task);
           setChecklist(details.checklist);
           setDependencies(
             details.dependencies.map((dependency) => {
@@ -1320,8 +1328,6 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
                 description: event.target.value
               }))
             }
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ '& .MuiInputLabel-root': { bgcolor: 'background.paper', px: 0.5 } }}
           />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField select fullWidth label="Status" value={editor.status} onChange={(event) => setEditor((value) => ({ ...value, status: event.target.value }))}>
@@ -1406,7 +1412,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
           </Paper>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField fullWidth label={`Task cost (${currencyCode})`} type="number" value={editor.costAmount} placeholder="N/A" helperText="Checklist costs are added separately." onChange={(event) => setEditor((value) => ({ ...value, costAmount: event.target.value, costDate: event.target.value && !value.costDate ? new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10) : value.costDate }))} slotProps={{ htmlInput: { min: 0, step: 0.01 } }}/>
-            <TextField fullWidth label="Cost date" type="date" value={editor.costDate} disabled={!editor.costAmount} helperText="Used in financial reports." onChange={(event) => setEditor((value) => ({ ...value, costDate: event.target.value }))} slotProps={{ inputLabel: { shrink: true } }}/>
+            <TextField fullWidth label="Cost date" type="date" value={editor.costDate} disabled={!editor.costAmount} helperText="Used immediately in the financial graph, even without a task due date." onChange={(event) => setEditor((value) => ({ ...value, costDate: event.target.value }))} slotProps={{ inputLabel: { shrink: true } }}/>
           </Stack>
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Typography variant="h6">Checklist</Typography>
@@ -1512,6 +1518,8 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
               <Button component="label" variant="outlined" startIcon={<AttachFile />}>
                 Add files
                 <input
+                  id="task-file-upload"
+                  name="taskFiles"
                   hidden
                   multiple
                   type="file"

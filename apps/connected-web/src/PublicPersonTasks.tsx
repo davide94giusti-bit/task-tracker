@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, Collapse, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, LinearProgress, MenuItem, Paper, Stack, Switch, TextField, ThemeProvider, ToggleButton, ToggleButtonGroup, Typography, createTheme } from '@mui/material';
+import { Alert, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, Collapse, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, LinearProgress, MenuItem, Paper, Stack, Switch, ThemeProvider, ToggleButton, ToggleButtonGroup, Typography, createTheme } from '@mui/material';
 import { Add, ArrowDownward, ArrowUpward, DarkMode, DeleteOutline, Edit, ExpandLess, ExpandMore, LightMode, Lock, NotificationsActive, Refresh, TaskAlt, VerifiedUser } from '@mui/icons-material';
 import { publicApi } from './api';
+import { AccessibleTextField as TextField } from './AccessibleTextField';
 
 type SharedChecklist = { id: string; description: string; completed: boolean; required: boolean; dueDate?: string | null; position: number; version: number };
 type SharedTask = { id: string; title: string; description?: string; status: string; priority: string; dueDate?: string | null; calculatedProgress: number; blocked: boolean; checklist: SharedChecklist[]; version: number; responsiblePersonId?: string | null; responsiblePersonName?: string | null; canUpdateChecklist: boolean; canComplete: boolean; canComment: boolean; canEditTask: boolean; canManageChecklist: boolean };
