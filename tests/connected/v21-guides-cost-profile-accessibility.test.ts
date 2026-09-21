@@ -44,6 +44,6 @@ describe('animated guides, reliable cost dates and editable profiles', () => {
 
   it('assigns a stable id and name to every shared text field', () => {
     expect(accessibleField).toContain('id={fieldId}');
-    expect(accessibleField).toContain('name={name || fieldId}');
+    expect(accessibleField).toContain('name={fieldName}');
   });
 });

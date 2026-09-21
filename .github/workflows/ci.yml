@@ -34,3 +34,16 @@ jobs:
       - run: npx electron-builder --win portable --x64
       - uses: actions/upload-artifact@v4
         with: {name: task-tracker-local-windows-x64, path: release/*Portable.exe}
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [verify, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - name: Deploy Workers, then Pages
+        run: npm run deploy:connected
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

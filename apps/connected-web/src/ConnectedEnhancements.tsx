@@ -140,7 +140,8 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
         </Button>
       </Stack>
       <Paper variant="outlined" sx={{ p: 1.25, mb: 2 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) auto' }, gap: 1.5, alignItems: 'center' }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(3, minmax(0, 1fr))' }, gap: 1 }}>
           <TextField
             select
             size="small"
@@ -159,7 +160,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
                 priority: event.target.value
               }))
             }
-            sx={{ minWidth: 140 }}
+            fullWidth
           >
             <MenuItem value="">All priorities</MenuItem>
             {['critical', 'high', 'medium', 'low', 'none'].map((value) => (
@@ -186,7 +187,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
                 projectId: event.target.value
               }))
             }
-            sx={{ minWidth: 180 }}
+            fullWidth
           >
             <MenuItem value="">All projects</MenuItem>
             {projects.map((project) => (
@@ -195,15 +196,13 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
               </MenuItem>
             ))}
           </TextField>
-          <TextField select size="small" value={urgency} onChange={(event) => setUrgency(event.target.value)} sx={{ minWidth: 150 }}>
+          <TextField select fullWidth size="small" label="Sort" value={urgency} onChange={(event) => setUrgency(event.target.value)}>
             <MenuItem value="smart">Smart urgency</MenuItem>
             <MenuItem value="due">Due date</MenuItem>
             <MenuItem value="priority">Priority</MenuItem>
             <MenuItem value="updated">Recently updated</MenuItem>
           </TextField>
-        </Stack>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} mt={1}>
-          <TextField size="small" label="Search" value={filters.search} onChange={(event) => setFilters((value) => ({ ...value, search: event.target.value }))} />
+          <TextField fullWidth size="small" label="Search" value={filters.search} onChange={(event) => setFilters((value) => ({ ...value, search: event.target.value }))} />
           <TextField
             select
             size="small"
@@ -215,7 +214,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
                 responsiblePersonId: event.target.value
               }))
             }
-            sx={{ minWidth: 180 }}
+            fullWidth
           >
             <MenuItem value="">All people</MenuItem>
             {people.map((person) => (
@@ -224,7 +223,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
               </MenuItem>
             ))}
           </TextField>
-          <TextField select size="small" label="Status" value={filters.status} onChange={(event) => setFilters((value) => ({ ...value, status: event.target.value }))} sx={{ minWidth: 150 }}>
+          <TextField select fullWidth size="small" label="Status" value={filters.status} onChange={(event) => setFilters((value) => ({ ...value, status: event.target.value }))}>
             <MenuItem value="">All statuses</MenuItem>
             {['not_started', 'in_progress', 'waiting', 'blocked', 'completed'].map((value) => (
               <MenuItem key={value} value={value}>
@@ -232,8 +231,8 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
               </MenuItem>
             ))}
           </TextField>
-        </Stack>
-        <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" mt={1}>
+        </Box>
+        <Stack direction="row" spacing={0.75} alignItems="center" justifyContent={{ xs: 'space-between', lg: 'flex-end' }} sx={{ pl: { lg: 1.5 }, borderLeft: { lg: 1 }, borderColor: { lg: 'divider' } }}>
           <ToggleButtonGroup exclusive size="small" value={layout} onChange={(_, value) => value && setLayout(value)} aria-label="Task layout">
             <ToggleButton value="table" aria-label="Table view">
               <TableRows sx={{ mr: 0.5 }} />
@@ -244,8 +243,9 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
               Cards
             </ToggleButton>
           </ToggleButtonGroup>
-          <Button startIcon={<Refresh />} aria-label="Refresh tasks" onClick={load}>Refresh</Button>
+          <Button variant="outlined" startIcon={<Refresh />} aria-label="Refresh tasks" onClick={load}>Refresh</Button>
         </Stack>
+        </Box>
       </Paper>
       {error && (
         <Alert severity="error" action={<Button onClick={load}>Retry</Button>}>
