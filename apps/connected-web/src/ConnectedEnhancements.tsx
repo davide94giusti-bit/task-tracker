@@ -3,6 +3,7 @@ import { Alert, Avatar, Badge, Box, Button, Card, CardActionArea, CardContent, C
 import { Add, ArrowBack, AttachFile, Call, CheckCircle, Close, Delete, Edit, Email, Link as LinkIcon, NotificationsActive, OpenInNew, Person as PersonIcon, Refresh, TableRows, ViewModule, WhatsApp } from '@mui/icons-material';
 import { api } from './api';
 import { AccessibleTextField as TextField } from './AccessibleTextField';
+import { ChecklistAttentionPanel, DeadlinePressureCard, TodayPressureWarning } from './DeadlineAttention';
 import type { ChecklistItem, CostEntry, CostSummary, Dashboard, NotificationItem, Person, Project, Task, TaskAttachment, TaskDependency, View } from './types';
 
 function titleFor(view: View, override?: string) {
@@ -32,6 +33,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
     try {
       const merged = {
         view: view === 'tasks' ? 'all' : view,
+        date: new Date().toLocaleDateString('en-CA'),
         ...query,
         ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value))
       } as Record<string, string>;
@@ -139,6 +141,8 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
           New task
         </Button>
       </Stack>
+      {view === 'today' && <><TodayPressureWarning onOpen={onOpen} refreshToken={refreshToken}/><ChecklistAttentionPanel onOpen={onOpen} refreshToken={refreshToken} /></>}
+      {view === 'today' && <Typography variant="h5" mb={1}>Tasks due today</Typography>}
       <Paper variant="outlined" sx={{ p: 1.25, mb: 2 }}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) auto' }, gap: 1.5, alignItems: 'center' }}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(3, minmax(0, 1fr))' }, gap: 1 }}>
@@ -572,6 +576,8 @@ export function EnhancedDashboardView({ openFilter, openTask, refreshToken = 0 }
               </Stack>
             </CardContent>
           </Card>
+          <ChecklistAttentionPanel onOpen={openTask} refreshToken={refreshToken} compact />
+          <DeadlinePressureCard onOpen={openTask} refreshToken={refreshToken} />
           <CostAnalyticsCard onOpenTask={openTask} refreshToken={refreshToken} />
         </>
       )}
@@ -596,7 +602,9 @@ export function NotificationBell() {
   useEffect(() => {
     void load();
     const timer = setInterval(load, 60_000);
-    return () => clearInterval(timer);
+    const changed = () => void load();
+    window.addEventListener('task-tracker:deadline-change', changed);
+    return () => { clearInterval(timer); window.removeEventListener('task-tracker:deadline-change', changed); };
   }, [load]);
   const read = async (item: NotificationItem) => {
     if (!item.readAt) {
@@ -605,6 +613,11 @@ export function NotificationBell() {
         body: { id: item.id }
       });
       await load();
+    }
+    if (item.taskId) {
+      const details = await api<{ task: Task }>(`/tasks/details?taskId=${encodeURIComponent(item.taskId)}`);
+      window.dispatchEvent(new CustomEvent('task-tracker:open-task', { detail: details.task }));
+      setAnchor(null);
     }
   };
   return (
@@ -637,7 +650,8 @@ export function NotificationBell() {
           items.map((item) => (
             <MenuItem key={item.id} onClick={() => void read(item)} sx={{ whiteSpace: 'normal', alignItems: 'flex-start' }}>
               <Box>
-                <Typography fontWeight={item.readAt ? 400 : 800}>{item.kind === 'reminder' ? 'Task reminder' : item.kind}</Typography>
+                <Typography fontWeight={item.readAt ? 400 : 800}>{item.title || (item.kind === 'reminder' ? 'Task reminder' : item.kind.replaceAll('_', ' '))}</Typography>
+                {item.detail && <Typography variant="body2">{item.detail}</Typography>}
                 <Typography variant="body2" color="text.secondary">
                   {new Date(item.createdAt).toLocaleString()} · {item.status}
                 </Typography>
@@ -760,10 +774,12 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, on
     [completing, setCompleting] = useState(false),
     [deleting, setDeleting] = useState(false),
     [completionOpen, setCompletionOpen] = useState(false),
+    [deadlineRefresh, setDeadlineRefresh] = useState(0),
     [updatingChecklistId, setUpdatingChecklistId] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null),
     scrollPositions = useRef<Record<string, number>>({});
   const current = history[history.length - 1] || task;
+  useEffect(() => { const changed = () => setDeadlineRefresh(value => value + 1); window.addEventListener('task-tracker:deadline-change', changed); return () => window.removeEventListener('task-tracker:deadline-change', changed); }, []);
   useEffect(() => {
     if (open && task) {
       setHistory([task]);
@@ -808,7 +824,7 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, on
     return () => {
       active = false;
     };
-  }, [open, current?.id, refreshToken]);
+  }, [open, current?.id, refreshToken, deadlineRefresh]);
   const saveScroll = () => {
     if (current && contentRef.current) scrollPositions.current[current.id] = contentRef.current.scrollTop;
   };

@@ -143,7 +143,7 @@ export default <WorkerHandler<Env>>{
             enabled: Boolean(preferences[0]?.pushEnabled),
             activeSubscriptions: subscriptions.length,
           },
-          scheduler: { cadenceMinutes: 5, explicitTaskReminders: true, dueTodayAutomation: false, overdueAutomation: false, dailySummaryAutomation: false },
+          scheduler: { cadenceMinutes: 5, explicitTaskReminders: true, checklistDueTodayInApp: true, checklistPushEmail: false, dueTodayAutomation: false, overdueAutomation: false, dailySummaryAutomation: false },
           deliveries: {
             pending: deliveries.filter(item => ['pending', 'retry'].includes(item.status)).length,
             failed: deliveries.filter(item => item.status === 'failed').length,

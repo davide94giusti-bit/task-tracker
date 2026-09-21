@@ -85,6 +85,7 @@ export const TaskQuery = z
     priority: Priority.optional(),
     status: TaskStatus.optional(),
     blocked: z.boolean().optional(),
+    date: IsoDate.optional(),
     dependencyRole: z.enum(["prerequisite"]).optional(),
     page: z.number().int().positive().default(1),
     pageSize: z.number().int().min(1).max(100).default(50),
@@ -114,6 +115,22 @@ export const ChecklistWrite = z.object({
   costAmount: MoneyAmount.optional(),
   dueDate: IsoDate.nullable().optional(),
 });
+export const ChecklistToggle = z.object({
+  itemId: Uuid,
+  completed: z.boolean(),
+  expectedVersion: z.number().int().positive(),
+}).strict();
+export const ChecklistAttentionQuery = z.object({
+  date: IsoDate,
+}).strict();
+export const DeadlinePressureQuery = z.object({
+  start: IsoDate,
+  today: IsoDate.optional(),
+  days: z.number().int().min(1).max(62).default(28),
+  weeks: z.number().int().min(1).max(16).default(12),
+  timezone: z.string().trim().min(1).max(100).default("UTC"),
+  weekStartsOn: z.number().int().min(0).max(6).default(1),
+}).strict();
 export const CostQuery = z
   .object({
     year: z.number().int().min(2000).max(2200).optional(),

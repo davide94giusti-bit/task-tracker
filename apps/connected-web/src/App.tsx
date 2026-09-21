@@ -7,10 +7,11 @@ import { AccountSecurity, PasswordSetup, UsersAccessView } from './AccessViews';
 import { AccessibleTextField as TextField } from './AccessibleTextField';
 import { BackupImportView, DiagnosticsView } from './BackupDiagnosticsViews';
 import { EnhancedDashboardView, EnhancedTasksView, NotificationBell, TaskDetailsDialog, TaskEditorDialog } from './ConnectedEnhancements';
+import { DeadlinePressureCard, localDateKey } from './DeadlineAttention';
 import { DependencyLoadView } from './OperationalViews';
 import { PublicPersonTasks } from './PublicPersonTasks';
 import { UserManualView } from './UserManualView';
-import type { Dashboard, Person, Project, Task, View } from './types';
+import type { Dashboard, DeadlinePressure, Person, Project, Task, View } from './types';
 // React 19 no longer exports JSX globally; this local bridge types stored icon elements.
 // eslint-disable-next-line @typescript-eslint/no-namespace
 declare namespace JSX {
@@ -307,7 +308,7 @@ function CalendarView({ onOpen, onNew, refreshToken }: {
     severity: string;
     count: number;
     tasks: Task[];
-}>>([]); useEffect(() => { const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1), end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0); api<typeof days>(`/calendar?start=${start.toISOString().slice(0, 10)}&end=${end.toISOString().slice(0, 10)}`).then(setDays); }, [cursor, refreshToken]);
+}>>([]), [pressure, setPressure] = useState<DeadlinePressure | null>(null); useEffect(() => { const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1), end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0); api<typeof days>(`/calendar?start=${localDateKey(start)}&end=${localDateKey(end)}`).then(setDays); }, [cursor, refreshToken]);
 const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 const cells = useMemo(() => { const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1), offset = (first.getDay() + 6) % 7, count = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate(); return [...Array(offset).fill(null), ...Array.from({ length: count }, (_, i) => { const date = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`; return days.find(d => d.date === date) || { date, severity: 'neutral', count: 0, tasks: [] }; })]; }, [cursor, days]);
 const day = days.find(d => d.date === selected);
@@ -326,11 +327,13 @@ return <>
 <Box className="calendar-grid">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(x => <Typography key={x} fontWeight={700} textAlign="center">{x}</Typography>)}{cells.map((d, i) => d ? <Card key={d.date} className={`calendar-day ${d.severity}${d.date === todayKey ? ' today' : ''}`}>
 <CardActionArea onClick={() => setSelected(d.date)}>
 <CardContent>
-<Typography fontWeight={700}>{Number(d.date.slice(-2))}</Typography>
+<Stack direction="row" justifyContent="space-between"><Typography fontWeight={700}>{Number(d.date.slice(-2))}</Typography>{pressure?.daily.find(period => period.date === d.date && period.level !== 'no_deadlines') && <Box component="span" aria-label={`${pressure.daily.find(period => period.date === d.date)?.level.replace('_',' ')} deadline pressure`} sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: pressure.daily.find(period => period.date === d.date)?.level === 'very_heavy' ? '#dc2626' : pressure.daily.find(period => period.date === d.date)?.level === 'heavy' ? '#ea580c' : pressure.daily.find(period => period.date === d.date)?.level === 'moderate' ? '#ca8a04' : '#2563eb' }}/>}</Stack>
 {d.count > 0 && <Box className="calendar-count" aria-label={`${d.count} tasks`}>{d.count}</Box>}
 </CardContent>
 </CardActionArea>
 </Card> : <Box key={`blank${i}`}/>)}</Box>
+<Typography variant="caption" color="text.secondary" display="block" mt={1}>Pressure dot: blue Light, yellow Moderate, orange Heavy, red Very heavy. Calendar counts remain unique parent-task cards.</Typography>
+<DeadlinePressureCard onOpen={onOpen} refreshToken={refreshToken} calendarStart={localDateKey(new Date(cursor.getFullYear(),cursor.getMonth(),1))} calendarDays={new Date(cursor.getFullYear(),cursor.getMonth()+1,0).getDate()} onData={setPressure}/>
 <Dialog open={!!selected} onClose={() => setSelected(null)} fullWidth>
 <DialogTitle>{selected && new Date(`${selected}T12:00`).toLocaleDateString(undefined, { dateStyle: 'full' })}</DialogTitle>
 <DialogContent>
@@ -340,11 +343,13 @@ return <>
 <Typography fontWeight={700}>{t.title}</Typography>
 <Typography variant="body2" color="text.secondary">{t.projectName || 'No project'} • {t.dueTime || 'All day'}</Typography>
 {!!t.checklistDueItems?.length && <Typography variant="body2" color="primary.main">Checklist: {t.checklistDueItems.join(', ')}</Typography>}
+{!!t.checklistDueDetails?.length && <Stack direction="row" gap={.5} flexWrap="wrap" mt={.5}>{t.checklistDueDetails.map(item => <Chip key={item.id} size="small" variant="outlined" label={`${item.description} · ${item.required ? 'Required' : 'Optional'}`}/>)}</Stack>}
 </CardContent>
 </CardActionArea>
 </Card>)}{!day?.tasks.length && <Typography color="text.secondary">No tasks on this day.</Typography>}</Stack>
 </DialogContent>
 <DialogActions>
+<Button disabled={!selected} onClick={() => { const date = selected; setSelected(null); if (date) setTimeout(() => window.dispatchEvent(new CustomEvent('task-tracker:open-pressure', { detail: date })), 0); }}>View deadline pressure</Button>
 <Button onClick={() => selected && onNew(selected)} startIcon={<Add />}>New task on this day</Button>
 <Button onClick={() => setSelected(null)}>Close</Button>
 </DialogActions>
@@ -442,7 +447,7 @@ export default function App() { const [logged, setLogged] = useState(!!session.g
 const mobile = useMediaQuery('(max-width:800px)'); useEffect(()=>{void consumeAuthLink().then(mode=>{if(mode){setLogged(true);setAuthMode(mode)}})},[]); useEffect(()=>{if(logged)void api<IdentityState>('/access/state').then(setIdentity).catch(()=>setIdentity(null));else setIdentity(null)},[logged]); useEffect(() => { if (!logged) return; const params = new URLSearchParams(location.search), token = params.get('claimProject'); if (!token) return; void api('/people/claim-linked-project', { method: 'POST', body: { token } }).then(() => { sessionStorage.setItem('linked-project-claim-message', 'Project linked to your Task Tracker account.'); setView('projects'); history.replaceState(null, '', '?view=projects'); }).catch(error => { sessionStorage.setItem('linked-project-claim-message', (error as Error).message); setView('projects'); history.replaceState(null, '', '?view=projects'); }); }, [logged]); useEffect(() => { const online = () => { setOffline(false); void flushQueue(); };
 const off = () => setOffline(true); addEventListener('online', online); addEventListener('offline', off);
 const focus = () => document.visibilityState === 'visible' && navigator.onLine && void flushQueue(); document.addEventListener('visibilitychange', focus); return () => { removeEventListener('online', online); removeEventListener('offline', off); document.removeEventListener('visibilitychange', focus); }; }, []);
-const theme = useMemo(() => createTheme({ palette: { mode: dark ? 'dark' : 'light', primary: { main: dark ? '#60a5fa' : '#1d4ed8', contrastText: dark ? '#07111f' : '#fff' }, background: { default: dark ? '#0c1220' : '#f4f7fb', paper: dark ? '#151d2e' : '#fff' } }, shape: { borderRadius: 12 }, typography: { fontFamily: 'Inter,Segoe UI,Arial,sans-serif', h4: { fontWeight: 800 }, h6: { fontWeight: 750 } }, components: { MuiButton: { defaultProps: { disableElevation: true }, styleOverrides: { root: { minHeight: 38, fontWeight: 700, textTransform: 'none' }, outlined: { borderColor: dark ? '#64748b' : undefined } } }, MuiCard: { styleOverrides: { root: { border: '1px solid', borderColor: dark ? '#475569' : '#d5dde8' } } }, MuiOutlinedInput: { styleOverrides: { root: { '& .MuiOutlinedInput-notchedOutline': { borderColor: dark ? '#64748b' : '#94a3b8' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: dark ? '#93c5fd' : '#1d4ed8' } } } }, MuiToggleButton: { styleOverrides: { root: { borderColor: dark ? '#64748b' : '#94a3b8', '&.Mui-selected': { backgroundColor: dark ? '#334155' : '#dbeafe', color: dark ? '#fff' : '#1e3a8a' } } } } } }), [dark]); if(location.pathname === '/shared-tasks')return <PublicPersonTasks/>; if(authMode)return <ThemeProvider theme={theme}><CssBaseline/><PasswordSetup mode={authMode} onDone={()=>{setAuthMode(null);setView('dashboard')}}/></ThemeProvider>; if (!logged)
+const theme = useMemo(() => createTheme({ palette: { mode: dark ? 'dark' : 'light', primary: { main: dark ? '#60a5fa' : '#1d4ed8', contrastText: dark ? '#07111f' : '#fff' }, background: { default: dark ? '#0c1220' : '#f4f7fb', paper: dark ? '#151d2e' : '#fff' } }, shape: { borderRadius: 12 }, typography: { fontFamily: 'Inter,Segoe UI,Arial,sans-serif', h4: { fontWeight: 800 }, h6: { fontWeight: 750 } }, components: { MuiButton: { defaultProps: { disableElevation: true }, styleOverrides: { root: { minHeight: 38, fontWeight: 700, textTransform: 'none' }, outlined: { borderColor: dark ? '#64748b' : undefined } } }, MuiCard: { styleOverrides: { root: { border: '1px solid', borderColor: dark ? '#475569' : '#d5dde8' } } }, MuiOutlinedInput: { styleOverrides: { root: { '& .MuiOutlinedInput-notchedOutline': { borderColor: dark ? '#64748b' : '#94a3b8' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: dark ? '#93c5fd' : '#1d4ed8' } } } }, MuiToggleButton: { styleOverrides: { root: { borderColor: dark ? '#64748b' : '#94a3b8', '&.Mui-selected': { backgroundColor: dark ? '#334155' : '#dbeafe', color: dark ? '#fff' : '#1e3a8a' } } } } } }), [dark]); useEffect(() => { const listener = (event: Event) => { releaseFocus(); setTask((event as CustomEvent<Task>).detail); }; window.addEventListener('task-tracker:open-task', listener); return () => window.removeEventListener('task-tracker:open-task', listener); }, []); if(location.pathname === '/shared-tasks')return <PublicPersonTasks/>; if(authMode)return <ThemeProvider theme={theme}><CssBaseline/><PasswordSetup mode={authMode} onDone={()=>{setAuthMode(null);setView('dashboard')}}/></ThemeProvider>; if (!logged)
     return <ThemeProvider theme={theme}><CssBaseline/>
 	<Login onSignedIn={() => setLogged(true)} />
 </ThemeProvider>;
