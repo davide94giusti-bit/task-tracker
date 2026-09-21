@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, Stack, TextField, Typography } from '@mui/material';
+import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, Stack, Typography } from '@mui/material';
 import { ExpandMore } from '@mui/icons-material';
 import { api } from './api';
 import { signOut, updatePassword } from './auth';
+import { AccessibleTextField as TextField } from './AccessibleTextField';
 
 type Invite = { id: string; email: string; status: string; invitedAt: string; expiresAt: string; acceptedAt?: string | null; acceptedUserId?: string | null };
 type Usage = { acceptedUsers: number; pendingInvitations: number; userLimit: number; pendingDeliveries: number; failedNotifications: number; emailsSentToday: number };
@@ -47,6 +48,21 @@ export function UsersAccessView() {
 }
 
 export function AccountSecurity() {
-  const [password, setPassword] = useState(''), [message, setMessage] = useState('');
-  return <Stack spacing={2}><Typography variant="h4">Security</Typography>{message && <Alert severity={message === 'Password changed.' ? 'success' : 'error'}>{message}</Alert>}<TextField type="password" label="New password" helperText="At least 12 characters, upper/lower case, and a number" value={password} onChange={event => setPassword(event.target.value)} /><Button variant="contained" onClick={() => updatePassword(password).then(() => setMessage('Password changed.')).catch(reason => setMessage(reason.message))}>Change password</Button><Button color="error" onClick={() => signOut('global').then(() => location.reload())}>Sign out all sessions</Button></Stack>;
+  const [password, setPassword] = useState(''), [displayName, setDisplayName] = useState(''), [email, setEmail] = useState(''), [busy, setBusy] = useState(false), [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  useEffect(() => {
+    api<{ displayName?: string | null; email?: string | null }>('/access/state').then(current => { setDisplayName(current.displayName || ''); setEmail(current.email || ''); }).catch(reason => setNotice({ text: reason.message, error: true }));
+  }, []);
+  const saveName = async () => {
+    setBusy(true); setNotice(null);
+    try { const result = await api<{ displayName: string }>('/access/profile', { method: 'POST', body: { displayName: displayName.trim() } }); setDisplayName(result.displayName); setNotice({ text: 'Display name updated.' }); }
+    catch (reason) { setNotice({ text: (reason as Error).message, error: true }); }
+    finally { setBusy(false); }
+  };
+  return <Stack spacing={3} sx={{ maxWidth: 620 }}>
+    <Typography variant="h4">Security</Typography>
+    {notice && <Alert severity={notice.error ? 'error' : 'success'}>{notice.text}</Alert>}
+    <Card variant="outlined"><CardContent><Stack spacing={2}><Box><Typography variant="h6">Profile</Typography><Typography color="text.secondary">Change the name shown in Task Tracker. Your email remains your sign-in address.</Typography></Box><TextField label="Username / display name" autoComplete="nickname" value={displayName} helperText={email ? `Sign-in email: ${email}` : 'Use 2–80 characters.'} onChange={event => setDisplayName(event.target.value.slice(0, 80))}/><Button variant="contained" disabled={busy || displayName.trim().length < 2} onClick={() => void saveName()}>Save display name</Button></Stack></CardContent></Card>
+    <Card variant="outlined"><CardContent><Stack spacing={2}><Box><Typography variant="h6">Password</Typography><Typography color="text.secondary">Use at least 12 characters with upper case, lower case, and a number.</Typography></Box><TextField type="password" label="New password" autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} /><Button variant="contained" disabled={busy || password.length < 12} onClick={() => { setBusy(true); setNotice(null); updatePassword(password).then(() => { setPassword(''); setNotice({ text: 'Password changed.' }); }).catch(reason => setNotice({ text: reason.message, error: true })).finally(() => setBusy(false)); }}>Change password</Button></Stack></CardContent></Card>
+    <Button color="error" onClick={() => signOut('global').then(() => location.reload())}>Sign out all sessions</Button>
+  </Stack>;
 }

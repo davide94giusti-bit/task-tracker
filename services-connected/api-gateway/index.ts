@@ -84,6 +84,7 @@ const routes: Array<[string, RegExp, keyof Env, string]> = [
 const accessRoutes: Array<[string, RegExp, string]> = [
   ["GET", /^\/v1\/access\/state$/, "/state"],
   ["POST", /^\/v1\/access\/accept$/, "/accept"],
+  ["POST", /^\/v1\/access\/profile$/, "/profile"],
   ["GET", /^\/v1\/access\/users$/, "/invitations"],
   ["GET", /^\/v1\/access\/usage$/, "/usage"],
   ["POST", /^\/v1\/access\/invite$/, "/invite"],

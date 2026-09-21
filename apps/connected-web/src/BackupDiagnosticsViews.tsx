@@ -13,11 +13,11 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from "@mui/material";
 import { Refresh } from "@mui/icons-material";
 import { api } from "./api";
+import { AccessibleTextField as TextField } from "./AccessibleTextField";
 
 type BackupMetadata = {
   format: string;
@@ -281,6 +281,8 @@ export function BackupImportView() {
             <Button component="label" variant="contained" disabled={!!busy}>
               Choose backup
               <input
+                id="backup-zip-upload"
+                name="backupZip"
                 hidden
                 type="file"
                 accept=".zip,application/zip"

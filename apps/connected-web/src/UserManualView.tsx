@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
-import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Chip, InputAdornment, Stack, TextField, Typography } from '@mui/material';
-import { ArrowForwardRounded, ExpandMore, Search } from '@mui/icons-material';
+import { useEffect, useMemo, useState } from 'react';
+import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Chip, IconButton, InputAdornment, Stack, Typography, useMediaQuery } from '@mui/material';
+import { ArrowBackRounded, ArrowForwardRounded, ExpandMore, PauseRounded, PlayArrowRounded, ReplayRounded, Search, TouchAppRounded } from '@mui/icons-material';
 import { CONNECTED_RELEASE } from '../../../packages/connected-contracts/release';
+import { AccessibleTextField as TextField } from './AccessibleTextField';
 
 type ManualSection = { title: string; keywords: string; content: React.ReactNode };
 type ManualPoint = { label: string; x: number; y: number; direction: 'up' | 'right' | 'down' | 'left' };
@@ -29,9 +30,36 @@ const arrowPosition = {
   up: { left: '50%', top: '-2px' }
 } as const;
 
-function ManualVisual({ index }: { index: number }) {
+function ManualVisual({ index, active }: { index: number; active: boolean }) {
   const visual = manualVisuals[index];
-  return <Box mt={2}><Typography fontWeight={700} mb={1}>Visual guide</Typography><Box sx={{ position: 'relative', width: visual.mobile ? 'min(100%, 390px)' : 'min(100%, 683px)', aspectRatio: visual.mobile ? '390 / 844' : '1180 / 760', mx: 'auto', borderRadius: 2, overflow: 'hidden', border: 1, borderColor: 'divider', bgcolor: 'background.default' }}><Box component="img" src={visual.src} alt={`Annotated Task Tracker view for ${visual.points.map(point => point.label).join(', ')}`} sx={{ position: 'absolute', inset: 0, display: 'block', width: '100%', height: '100%', objectFit: 'fill' }}/>{visual.points.map((point, pointIndex) => <Box key={point.label} aria-hidden sx={{ position: 'absolute', top: `${point.y}%`, left: `${point.x}%`, transform: 'translate(-50%,-50%)', width: { xs: 26, sm: 30 }, height: { xs: 26, sm: 30 }, borderRadius: '50%', display: 'grid', placeItems: 'center', bgcolor: 'primary.main', color: 'primary.contrastText', fontSize: { xs: 12, sm: 14 }, lineHeight: 1, fontWeight: 900, boxShadow: '0 2px 8px rgba(0,0,0,.65)', border: '2px solid', borderColor: 'common.white', zIndex: pointIndex + 1 }}>{pointIndex + 1}<ArrowForwardRounded sx={{ position: 'absolute', ...arrowPosition[point.direction], color: 'primary.main', fontSize: { xs: 30, sm: 38 }, transform: `translate(-50%,-50%) rotate(${arrowRotation[point.direction]})`, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.75))', stroke: 'white', strokeWidth: .6 }}/></Box>)}</Box><Stack component="ol" spacing={.5} mt={1} sx={{ pl: 3 }}>{visual.points.map(point => <Typography component="li" variant="body2" key={point.label}>{point.label}</Typography>)}</Stack></Box>;
+  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const [step, setStep] = useState(0);
+  const [playing, setPlaying] = useState(!reduceMotion);
+  useEffect(() => {
+    if (!active || !playing || reduceMotion) return;
+    const timer = window.setInterval(() => setStep(value => (value + 1) % visual.points.length), 2600);
+    return () => window.clearInterval(timer);
+  }, [active, playing, reduceMotion, visual.points.length]);
+  useEffect(() => {
+    if (active) setStep(0);
+  }, [active]);
+  const point = visual.points[step];
+  return <Box mt={2}>
+    <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+      <Box><Typography fontWeight={700}>Animated walkthrough</Typography><Typography variant="caption" color="text.secondary">Step {step + 1} of {visual.points.length} · {point.label}</Typography></Box>
+      <Stack direction="row" spacing={.25}>
+        <IconButton size="small" aria-label="Previous walkthrough step" onClick={() => setStep(value => (value - 1 + visual.points.length) % visual.points.length)}><ArrowBackRounded/></IconButton>
+        {!reduceMotion && <IconButton size="small" aria-label={playing ? 'Pause walkthrough' : 'Play walkthrough'} onClick={() => setPlaying(value => !value)}>{playing ? <PauseRounded/> : <PlayArrowRounded/>}</IconButton>}
+        <IconButton size="small" aria-label="Replay walkthrough" onClick={() => { setStep(0); setPlaying(!reduceMotion); }}><ReplayRounded/></IconButton>
+        <IconButton size="small" aria-label="Next walkthrough step" onClick={() => setStep(value => (value + 1) % visual.points.length)}><ArrowForwardRounded/></IconButton>
+      </Stack>
+    </Stack>
+    <Box sx={{ position: 'relative', width: visual.mobile ? 'min(100%, 390px)' : 'min(100%, 683px)', aspectRatio: visual.mobile ? '390 / 844' : '1180 / 760', mx: 'auto', borderRadius: 2, overflow: 'hidden', border: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
+      <Box component="img" src={visual.src} alt={`Task Tracker walkthrough: ${point.label}`} sx={{ position: 'absolute', inset: 0, display: 'block', width: '100%', height: '100%', objectFit: 'fill', transform: active && !reduceMotion ? 'scale(1.035)' : 'scale(1)', transformOrigin: `${point.x}% ${point.y}%`, transition: 'transform-origin 500ms ease, transform 500ms ease' }}/>
+      <Box aria-hidden key={`${index}-${step}`} sx={{ position: 'absolute', top: `${point.y}%`, left: `${point.x}%`, transform: 'translate(-50%,-50%)', width: { xs: 30, sm: 36 }, height: { xs: 30, sm: 36 }, borderRadius: '50%', display: 'grid', placeItems: 'center', bgcolor: 'primary.main', color: 'primary.contrastText', fontSize: { xs: 13, sm: 15 }, lineHeight: 1, fontWeight: 900, boxShadow: '0 0 0 7px rgba(96,165,250,.24), 0 4px 14px rgba(0,0,0,.65)', border: '2px solid', borderColor: 'common.white', zIndex: 2, animation: reduceMotion ? 'none' : 'manualPulse 1.3s ease-in-out infinite', '@keyframes manualPulse': { '0%, 100%': { boxShadow: '0 0 0 4px rgba(96,165,250,.18), 0 4px 14px rgba(0,0,0,.65)' }, '50%': { boxShadow: '0 0 0 11px rgba(96,165,250,.34), 0 4px 14px rgba(0,0,0,.65)' } } }}>{step + 1}<ArrowForwardRounded sx={{ position: 'absolute', ...arrowPosition[point.direction], color: 'primary.main', fontSize: { xs: 34, sm: 42 }, transform: `translate(-50%,-50%) rotate(${arrowRotation[point.direction]})`, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.75))', stroke: 'white', strokeWidth: .6 }}/><TouchAppRounded sx={{ position: 'absolute', left: '85%', top: '85%', color: 'common.white', fontSize: 25, filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.8))' }}/></Box>
+      <Box sx={{ position: 'absolute', left: 0, right: 0, bottom: 0, px: 1.5, py: 1, bgcolor: 'rgba(8,15,29,.88)', color: 'common.white', zIndex: 1 }}><Typography variant="body2" fontWeight={750}>{step + 1}. {point.label}</Typography><Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${visual.points.length}, 1fr)`, gap: .5, mt: .75 }}>{visual.points.map((entry, current) => <Button key={entry.label} aria-label={`Show step ${current + 1}: ${entry.label}`} onClick={() => setStep(current)} sx={{ minWidth: 0, height: 4, p: 0, borderRadius: 4, bgcolor: current === step ? 'primary.main' : 'rgba(255,255,255,.3)', '&:hover': { bgcolor: current === step ? 'primary.light' : 'rgba(255,255,255,.5)' } }}/>)}</Box></Box>
+    </Box>
+  </Box>;
 }
 
 const sections: ManualSection[] = [
@@ -44,12 +72,13 @@ const sections: ManualSection[] = [
   { title: 'People, contacts and Recap', keywords: 'people contact phone whatsapp call email recap master link portal share regenerate revoke collaborate permissions', content: <><Typography>People are contacts and responsible parties. Open a person to see their tasks; phone and email actions use the device’s applications. Add to contacts downloads a vCard.</Typography><Typography mt={1}>Adding a person to a project links their existing directory record. It does not assign tasks, create a login, or grant application access. Contact fields stay private unless explicitly shared; removing the project link keeps the person and their tasks.</Typography><Typography mt={1}>Recap creates one revocable live link. Choose assigned work or one project, an optional expiry, and whether the recipient may update assigned checklist items, complete assigned tasks, or comment. Regenerate invalidates the previous link; Revoke disables all access.</Typography></> },
   { title: 'Shared collaboration portal', keywords: 'portal recipient guest verified project checklist complete comment email app linked project project people contacts supervise create edit task manage checklist on behalf', content: <><Typography>A guest can open the link without an account. Reading does not require sign-in; permitted changes require a six-digit code sent to the contact email and remain valid for 30 minutes. Project sharing can independently expose project contacts, task assignments, supervision controls, task authoring, and checklist management. A collaborator can update another contact's work only when that contact is attached to the project, marked supervisable, and the precise checklist or completion permission is enabled.</Typography><Typography mt={1}>Can create and edit tasks is restricted to the selected shared project. New tasks are assigned to the collaborator; they cannot move or delete tasks, change the responsible person, or use editing to bypass the separate completion permission. Can manage checklist items permits adding, renaming, reordering, and removing checklist items. Ticking checklist items remains a separate permission.</Typography><Typography mt={1}>Project people are live references to the owner's People directory. Name and function identify the contact; phone, email, address, and notes appear only when the owner shares each field. Removing someone from Project people does not delete the original contact. Activity history always separates the responsible person from the collaborator who recorded an update. The advanced Manage project contacts permission is off by default and, when explicitly enabled, requires verification before a collaborator can add, edit, or remove project contacts.</Typography><Typography mt={1}>If the recipient also uses Task Tracker, they can select Add to my Task Tracker and sign in with the same invited email. The project then appears under Linked projects, separate from their private workspace. The owner may expire, regenerate, or revoke access at any time.</Typography></> },
   { title: 'Notifications and reminder email', keywords: 'notification recurring repeat daily weekly monthly email reminder bell permission test quiet hours scheduler trigger', content: <><Typography>Task reminder delivery requires a reminder date/time, an active task, an active account and the corresponding preference. A reminder can run once or repeat daily, weekly, or monthly at a chosen interval until the task closes. The scheduled reminder service processes due deliveries. Browser notification permission must also be granted by the browser.</Typography><Typography mt={1}>Settings lets you enable or disable live notifications and reminder emails independently. Use the test actions and Diagnostics to verify configuration. Person-portal updates are controlled by the recipient on their shared page.</Typography></> },
-  { title: 'Users, access and security', keywords: 'users invite accepted pending revoked admin password username display name security workspace', content: <><Typography>Only the platform administrator sees Users &amp; access and can invite, resend, revoke or disable application users. During invitation acceptance, a new user chooses both a password and a display name. Email remains the sign-in identifier; the display name is how the user is shown in Task Tracker.</Typography><Typography mt={1}>Invited users receive separate private workspaces and cannot invite others unless explicitly made platform administrators. Security contains password/account controls. People records do not grant login access.</Typography></> },
+  { title: 'Users, access and security', keywords: 'users invite accepted pending revoked admin password username display name security workspace', content: <><Typography>Only the platform administrator sees Users &amp; access and can invite, resend, revoke or disable application users. During invitation acceptance, a new user chooses both a password and a display name. Email remains the sign-in identifier; the display name is how the user is shown in Task Tracker.</Typography><Typography mt={1}>Invited users receive separate private workspaces and cannot invite others unless explicitly made platform administrators. Use Security to change your username/display name or password and to sign out all sessions. People records do not grant login access.</Typography></> },
   { title: 'Files, backup and diagnostics', keywords: 'file attachment link upload backup import export diagnostics error warning debug verbose', content: <><Typography>Task files are private and open through time-limited signed links. HTTPS links can also be attached. Backup &amp; import supports portable data transfer; review import previews before applying.</Typography><Typography mt={1}>Diagnostics filters service events by severity and exposes request IDs and downloadable technical detail for troubleshooting.</Typography></> }
 ];
 
 export function UserManualView() {
   const [query, setQuery] = useState('');
+  const [expanded, setExpanded] = useState<string | false>(false);
   const normalized = query.trim().toLowerCase();
   const matches = useMemo(() => sections.filter((section) => !normalized || `${section.title} ${section.keywords}`.toLowerCase().includes(normalized)), [normalized]);
   return <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
@@ -57,9 +86,9 @@ export function UserManualView() {
     <Typography color="text.secondary" mb={2}>Search the guide or open a macro area.</Typography>
     <TextField fullWidth label="Search the manual" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try: checklist, blocked, recap, notifications…" slotProps={{ input: { startAdornment: <InputAdornment position="start"><Search /></InputAdornment> } }} sx={{ mb: 2 }} />
     <Stack direction="row" spacing={1} mb={2} alignItems="center"><Chip label={`${matches.length} section${matches.length === 1 ? '' : 's'}`} /><Typography variant="body2" color="text.secondary">Matching sections open automatically while searching.</Typography></Stack>
-    {matches.map((section) => <Accordion key={section.title} defaultExpanded={!!normalized} expanded={normalized ? true : undefined}>
+    {matches.map((section) => <Accordion key={section.title} expanded={normalized ? true : expanded === section.title} onChange={(_, open) => setExpanded(open ? section.title : false)}>
       <AccordionSummary expandIcon={<ExpandMore />}><Typography fontWeight={750}>{section.title}</Typography></AccordionSummary>
-      <AccordionDetails>{section.content}<ManualVisual index={sections.indexOf(section)}/></AccordionDetails>
+      <AccordionDetails>{section.content}<ManualVisual index={sections.indexOf(section)} active={Boolean(normalized) || expanded === section.title}/></AccordionDetails>
     </Accordion>)}
     {!matches.length && <Alert severity="info">No manual section matches “{query}”. Try a shorter word such as task, person, cost or notification.</Alert>}
   </Box>;
