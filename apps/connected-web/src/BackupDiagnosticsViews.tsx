@@ -283,6 +283,7 @@ export function BackupImportView() {
               <input
                 id="backup-zip-upload"
                 name="backupZip"
+                aria-label="Backup ZIP file"
                 hidden
                 type="file"
                 accept=".zip,application/zip"
