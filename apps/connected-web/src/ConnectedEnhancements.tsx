@@ -658,15 +658,22 @@ function PersonDetailsDialog({ personId, fallbackName, open, onClose, mobile }: 
   };
   return (
     <>
-      <Dialog open={open} onClose={onClose} fullScreen={mobile} fullWidth maxWidth="sm">
-        <DialogTitle>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        fullScreen={mobile}
+        fullWidth
+        maxWidth="sm"
+        slotProps={{ paper: { sx: mobile ? { height: '100dvh', maxHeight: '100dvh' } : undefined } }}
+      >
+        <DialogTitle sx={mobile ? { flexShrink: 0, borderBottom: 1, borderColor: 'divider' } : undefined}>
           <Stack direction="row" alignItems="center" spacing={1}>
             <PersonIcon color="primary" />
             <Box flex={1}>{person?.fullName || fallbackName || 'Contact details'}</Box>
             <IconButton aria-label="Close contact details" onClick={onClose}><Close /></IconButton>
           </Stack>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={mobile ? { overflowY: 'auto', px: 2, pb: 2 } : undefined}>
           {error && <Alert severity="error">{error}</Alert>}
           {!person && !error && <LinearProgress />}
           {person && (
@@ -686,7 +693,24 @@ function PersonDetailsDialog({ personId, fallbackName, open, onClose, mobile }: 
             </Stack>
           )}
         </DialogContent>
-        <DialogActions><Button onClick={onClose}>Close</Button></DialogActions>
+        <DialogActions
+          sx={mobile ? {
+            position: 'sticky',
+            bottom: 0,
+            zIndex: 3,
+            flexShrink: 0,
+            borderTop: 1,
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+            px: 2,
+            pt: 1.25,
+            pb: 'calc(20px + env(safe-area-inset-bottom))',
+            boxShadow: '0 -8px 20px rgba(0,0,0,.18)',
+            '& .MuiButton-root': { minHeight: 48, m: 0 }
+          } : undefined}
+        >
+          <Button fullWidth={mobile} variant={mobile ? 'contained' : 'text'} startIcon={mobile ? <Close /> : undefined} onClick={onClose}>Close</Button>
+        </DialogActions>
       </Dialog>
       <Dialog open={phoneActions} onClose={() => setPhoneActions(false)} fullWidth maxWidth="xs">
         <DialogTitle>Contact {person?.fullName || fallbackName}</DialogTitle>
