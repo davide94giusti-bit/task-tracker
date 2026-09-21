@@ -33,7 +33,8 @@ describe('scheduling, checklist completion, finance and profile improvements', (
     expect(() => InvitationAccept.parse({ displayName: 'D' })).toThrow();
     expect(migration).toContain('p_display_name text');
     expect(editor).toContain('Complete task automatically when every checklist item is done');
-    expect(manual).toContain('ArrowForwardRounded');
+    expect(manual).toContain('TouchAppRounded');
+    expect(manual).not.toContain('ArrowForwardRounded');
     expect(manual).not.toContain('content: \'"➜"\'');
   });
 });

@@ -281,6 +281,7 @@ export default <WorkerHandler<Env>>{
           requestId,
           new Error("Route not found"),
           404,
+          headers || {},
         );
       const binding = env[route[2]] as unknown as Fetcher,
         limit = url.pathname.startsWith("/v1/backup/import-") || url.pathname === "/v1/tasks/attachments/upload"

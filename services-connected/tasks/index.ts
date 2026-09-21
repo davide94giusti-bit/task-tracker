@@ -75,11 +75,19 @@ export default <WorkerHandler<Env>>{
       }
       if (url.pathname === "/save") {
         const input = TaskWrite.parse(await body(request));
+        const saved = (await call(env.DATA, "/tasks/save", env, context, {
+          method: "POST",
+          body: JSON.stringify(input),
+        })) as any;
+        if ((input.costDate ?? null) !== (saved?.costDate ?? null))
+          throw Object.assign(
+            new Error(
+              "The cost date was not persisted. Deploy the current Tasks and Data Workers together, then retry.",
+            ),
+            { status: 503 },
+          );
         return json(
-          await call(env.DATA, "/tasks/save", env, context, {
-            method: "POST",
-            body: JSON.stringify(input),
-          }),
+          saved,
           200,
           requestId,
         );

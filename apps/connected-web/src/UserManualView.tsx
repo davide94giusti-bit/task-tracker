@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Chip, IconButton, InputAdornment, Stack, Typography, useMediaQuery } from '@mui/material';
-import { ArrowBackRounded, ArrowForwardRounded, ExpandMore, PauseRounded, PlayArrowRounded, ReplayRounded, Search, TouchAppRounded } from '@mui/icons-material';
+import { ExpandMore, PauseRounded, PlayArrowRounded, ReplayRounded, Search, TouchAppRounded } from '@mui/icons-material';
 import { CONNECTED_RELEASE } from '../../../packages/connected-contracts/release';
 import { AccessibleTextField as TextField } from './AccessibleTextField';
 
@@ -22,14 +22,6 @@ const manualVisuals: ManualVisualData[] = [
   { src: '/manual/diagnostics.png', points: [{ label: 'Refresh or download diagnostics', x: 84, y: 17, direction: 'left' }, { label: 'Connected service health', x: 48, y: 43, direction: 'down' }, { label: 'Recent service events', x: 50, y: 76, direction: 'up' }] }
 ];
 
-const arrowRotation = { right: '0deg', down: '90deg', left: '180deg', up: '-90deg' } as const;
-const arrowPosition = {
-  right: { left: 'calc(100% + 2px)', top: '50%' },
-  down: { left: '50%', top: 'calc(100% + 2px)' },
-  left: { left: '-2px', top: '50%' },
-  up: { left: '50%', top: '-2px' }
-} as const;
-
 function ManualVisual({ index, active }: { index: number; active: boolean }) {
   const visual = manualVisuals[index];
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
@@ -48,16 +40,14 @@ function ManualVisual({ index, active }: { index: number; active: boolean }) {
     <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
       <Box><Typography fontWeight={700}>Animated walkthrough</Typography><Typography variant="caption" color="text.secondary">Step {step + 1} of {visual.points.length} · {point.label}</Typography></Box>
       <Stack direction="row" spacing={.25}>
-        <IconButton size="small" aria-label="Previous walkthrough step" onClick={() => setStep(value => (value - 1 + visual.points.length) % visual.points.length)}><ArrowBackRounded/></IconButton>
         {!reduceMotion && <IconButton size="small" aria-label={playing ? 'Pause walkthrough' : 'Play walkthrough'} onClick={() => setPlaying(value => !value)}>{playing ? <PauseRounded/> : <PlayArrowRounded/>}</IconButton>}
         <IconButton size="small" aria-label="Replay walkthrough" onClick={() => { setStep(0); setPlaying(!reduceMotion); }}><ReplayRounded/></IconButton>
-        <IconButton size="small" aria-label="Next walkthrough step" onClick={() => setStep(value => (value + 1) % visual.points.length)}><ArrowForwardRounded/></IconButton>
       </Stack>
     </Stack>
     <Box sx={{ position: 'relative', width: visual.mobile ? 'min(100%, 390px)' : 'min(100%, 683px)', aspectRatio: visual.mobile ? '390 / 844' : '1180 / 760', mx: 'auto', borderRadius: 2, overflow: 'hidden', border: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
       <Box component="img" src={visual.src} alt={`Task Tracker walkthrough: ${point.label}`} sx={{ position: 'absolute', inset: 0, display: 'block', width: '100%', height: '100%', objectFit: 'fill', transform: active && !reduceMotion ? 'scale(1.035)' : 'scale(1)', transformOrigin: `${point.x}% ${point.y}%`, transition: 'transform-origin 500ms ease, transform 500ms ease' }}/>
-      <Box aria-hidden key={`${index}-${step}`} sx={{ position: 'absolute', top: `${point.y}%`, left: `${point.x}%`, transform: 'translate(-50%,-50%)', width: { xs: 30, sm: 36 }, height: { xs: 30, sm: 36 }, borderRadius: '50%', display: 'grid', placeItems: 'center', bgcolor: 'primary.main', color: 'primary.contrastText', fontSize: { xs: 13, sm: 15 }, lineHeight: 1, fontWeight: 900, boxShadow: '0 0 0 7px rgba(96,165,250,.24), 0 4px 14px rgba(0,0,0,.65)', border: '2px solid', borderColor: 'common.white', zIndex: 2, animation: reduceMotion ? 'none' : 'manualPulse 1.3s ease-in-out infinite', '@keyframes manualPulse': { '0%, 100%': { boxShadow: '0 0 0 4px rgba(96,165,250,.18), 0 4px 14px rgba(0,0,0,.65)' }, '50%': { boxShadow: '0 0 0 11px rgba(96,165,250,.34), 0 4px 14px rgba(0,0,0,.65)' } } }}>{step + 1}<ArrowForwardRounded sx={{ position: 'absolute', ...arrowPosition[point.direction], color: 'primary.main', fontSize: { xs: 34, sm: 42 }, transform: `translate(-50%,-50%) rotate(${arrowRotation[point.direction]})`, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.75))', stroke: 'white', strokeWidth: .6 }}/><TouchAppRounded sx={{ position: 'absolute', left: '85%', top: '85%', color: 'common.white', fontSize: 25, filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.8))' }}/></Box>
-      <Box sx={{ position: 'absolute', left: 0, right: 0, bottom: 0, px: 1.5, py: 1, bgcolor: 'rgba(8,15,29,.88)', color: 'common.white', zIndex: 1 }}><Typography variant="body2" fontWeight={750}>{step + 1}. {point.label}</Typography><Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${visual.points.length}, 1fr)`, gap: .5, mt: .75 }}>{visual.points.map((entry, current) => <Button key={entry.label} aria-label={`Show step ${current + 1}: ${entry.label}`} onClick={() => setStep(current)} sx={{ minWidth: 0, height: 4, p: 0, borderRadius: 4, bgcolor: current === step ? 'primary.main' : 'rgba(255,255,255,.3)', '&:hover': { bgcolor: current === step ? 'primary.light' : 'rgba(255,255,255,.5)' } }}/>)}</Box></Box>
+      <TouchAppRounded aria-hidden key={`${index}-${step}`} sx={{ position: 'absolute', top: `${point.y}%`, left: `${point.x}%`, color: 'common.white', fontSize: { xs: 34, sm: 42 }, zIndex: 2, filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.9)) drop-shadow(0 0 5px #60a5fa)', animation: reduceMotion ? 'none' : 'manualTap 1.35s ease-in-out infinite', '@keyframes manualTap': { '0%, 35%, 100%': { transform: 'translate(-50%,-58%) scale(1)' }, '52%': { transform: 'translate(-50%,-46%) scale(.92)' }, '64%': { transform: 'translate(-50%,-50%) scale(.96)' } } }}/>
+      <Box sx={{ position: 'absolute', left: 0, right: 0, bottom: 0, p: 1.25, bgcolor: 'rgba(8,15,29,.9)', color: 'common.white', zIndex: 1 }}><Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${visual.points.length}, minmax(0, 1fr))`, gap: .75 }}>{visual.points.map((entry, current) => <Button key={entry.label} aria-label={`Show step ${current + 1}: ${entry.label}`} onClick={() => { setStep(current); setPlaying(false); }} variant={current === step ? 'contained' : 'outlined'} sx={{ minWidth: 0, minHeight: 58, px: 1, py: .75, borderRadius: 1.5, justifyContent: 'flex-start', alignItems: 'center', gap: .75, color: current === step ? 'primary.contrastText' : 'common.white', borderColor: current === step ? 'primary.main' : 'rgba(255,255,255,.38)', bgcolor: current === step ? 'primary.main' : 'rgba(255,255,255,.06)', textTransform: 'none', lineHeight: 1.15, '&:hover': { bgcolor: current === step ? 'primary.dark' : 'rgba(255,255,255,.14)' } }}><Box component="span" sx={{ flex: '0 0 auto', width: 25, height: 25, borderRadius: '50%', display: 'grid', placeItems: 'center', bgcolor: current === step ? 'common.white' : 'rgba(255,255,255,.15)', color: current === step ? 'primary.main' : 'common.white', fontWeight: 900 }}>{current + 1}</Box><Typography component="span" variant="caption" fontWeight={750} textAlign="left">{entry.label}</Typography></Button>)}</Box></Box>
     </Box>
   </Box>;
 }
