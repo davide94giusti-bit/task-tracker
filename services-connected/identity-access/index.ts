@@ -111,9 +111,10 @@ export default <WorkerHandler<Env>>{
         if (url.pathname === "/authorize" || url.pathname === "/state")
           return json(await state(env, context), 200, requestId);
         if (url.pathname === "/accept") {
-          InvitationAccept.parse(await body(request));
+          const input = InvitationAccept.parse(await body(request));
           const result = await data(env, "/identity/accept", context, {
             email: context.email,
+            displayName: input.displayName,
             bootstrapEmails: env.BOOTSTRAP_OWNER_EMAILS.split(",")
               .map((x) => x.trim().toLowerCase())
               .filter(Boolean),

@@ -195,6 +195,7 @@ export default <WorkerHandler<Env>>{
                 required: input.required,
                 position: input.position,
                 cost_amount: input.costAmount,
+                due_date: input.dueDate,
                 updated_by: context.userId,
                 ...(!input.id ? { created_by: context.userId } : {}),
               },

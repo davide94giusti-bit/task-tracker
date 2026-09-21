@@ -29,6 +29,7 @@ const entryMonth = (entry: any) =>
   entry.date ? Number(String(entry.date).slice(5, 7)) : null;
 
 export function buildCostSummary(input: CostInput) {
+  const today = new Date().toISOString().slice(0, 10);
   const projectNames = new Map(
       input.projects.map((project) => [project.id, project.name]),
     ),
@@ -55,8 +56,8 @@ export function buildCostSummary(input: CostInput) {
     .map((task) => {
       const taskCents = cents(task.costAmount),
         checklistCents = checklistCosts.get(task.id) || 0,
-        timing = task.status === 'completed' ? 'past' : 'future',
-        date = timing === 'past' ? task.completedAt || null : task.dueDate || null;
+        date = task.costDate || task.completedAt || task.dueDate || task.createdAt || null,
+        timing = task.status === 'completed' || (date && String(date).slice(0, 10) <= today) ? 'past' : 'future';
       return {
         taskId: task.id,
         title: task.title,
@@ -70,6 +71,7 @@ export function buildCostSummary(input: CostInput) {
         date,
         completedAt: task.completedAt || null,
         dueDate: task.dueDate || null,
+        costDate: task.costDate || null,
       };
     });
   const availableYears = Array.from(

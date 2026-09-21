@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
+import { Alert, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { Add, ArrowBack, AttachFile, Call, CheckCircle, Close, Delete, Edit, Email, Link as LinkIcon, NotificationsActive, OpenInNew, Person as PersonIcon, Refresh, TableRows, ViewModule, WhatsApp } from '@mui/icons-material';
 import { api } from './api';
 import type { ChecklistItem, CostEntry, CostSummary, Dashboard, NotificationItem, Person, Project, Task, TaskAttachment, TaskDependency, View } from './types';
@@ -910,6 +910,8 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, on
                 {shownTask.blocked && <Chip label="Blocked" color="warning" />}
                 {shownTask.dueDate && <Chip label={`Due ${new Date(`${shownTask.dueDate}T12:00:00`).toLocaleDateString()}`} />}
                 {shownTask.reminderAt && <Chip label={`Reminder ${new Date(shownTask.reminderAt).toLocaleString()}`} variant="outlined" />}
+                {shownTask.reminderAt && shownTask.reminderRepeat && shownTask.reminderRepeat !== 'none' && <Chip label={`Repeats every ${shownTask.reminderRepeatInterval || 1} ${reminderRepeatUnit(shownTask.reminderRepeat)}${(shownTask.reminderRepeatInterval || 1) > 1 ? 's' : ''}`} color="info" variant="outlined" />}
+                {shownTask.completeWhenChecklistDone && <Chip label="Completes with checklist" color="success" variant="outlined" />}
                 {projectName && <Chip label={projectName} />}
               </Stack>
               {shownTask.responsiblePersonId && (
@@ -921,13 +923,14 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, on
                 <Stack direction="row" justifyContent="space-between" alignItems="center"><Typography variant="h6">Cost breakdown</Typography><Typography variant="h6">{hasCost ? money(totalCost) : 'N/A'}</Typography></Stack>
                 <Stack spacing={0.75} mt={1}>
                   <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">Task cost</Typography><Typography>{taskCost === null ? 'N/A' : money(taskCost)}</Typography></Stack>
+                  {shownTask.costDate && <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">Cost date</Typography><Typography>{new Date(`${shownTask.costDate}T12:00:00`).toLocaleDateString()}</Typography></Stack>}
                   <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">Checklist items</Typography><Typography>{details?.checklist.some((item) => item.costAmount !== null && item.costAmount !== undefined) ? money(checklistCost) : 'N/A'}</Typography></Stack>
                 </Stack>
               </Paper>
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Stack direction="row" justifyContent="space-between"><Typography variant="h6">Checklist</Typography><Typography color="text.secondary">{completedChecklist}/{details?.checklist.length || 0}</Typography></Stack>
                 <Stack spacing={1} mt={1}>
-                  {details?.checklist.map((item) => <Stack key={item.id || item.description} direction="row" spacing={1} alignItems="center"><Checkbox checked={item.completed} disabled /><Typography flex={1} sx={{ textDecoration: item.completed ? 'line-through' : 'none' }}>{item.description}</Typography>{item.costAmount !== null && item.costAmount !== undefined && <Chip size="small" label={money(item.costAmount)} />}{item.required && <Chip size="small" label="Required" />}</Stack>)}
+                  {details?.checklist.map((item) => <Stack key={item.id || item.description} direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap><Checkbox checked={item.completed} disabled /><Typography flex={1} minWidth={160} sx={{ textDecoration: item.completed ? 'line-through' : 'none' }}>{item.description}</Typography>{item.dueDate && <Chip size="small" variant="outlined" label={new Date(`${item.dueDate}T12:00:00`).toLocaleDateString()} />}{item.costAmount !== null && item.costAmount !== undefined && <Chip size="small" label={money(item.costAmount)} />}{item.required && <Chip size="small" label="Required" />}</Stack>)}
                   {!details?.checklist.length && <Typography color="text.secondary">No checklist items.</Typography>}
                 </Stack>
               </Paper>
@@ -1012,6 +1015,7 @@ const reminderInputValue = (value?: string | null) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '' : new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 };
+const reminderRepeatUnit = (repeat: 'daily' | 'weekly' | 'monthly') => repeat === 'daily' ? 'day' : repeat === 'weekly' ? 'week' : 'month';
 
 export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile }: { task: Task | null; newDate: string | null; open: boolean; onClose: () => void; onSaved: () => void; mobile: boolean }) {
   const createdTaskId = useRef<string | null>(null);
@@ -1022,9 +1026,13 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
     priority: 'medium',
     dueDate: '',
     reminderAt: '',
+    reminderRepeat: 'none' as 'none' | 'daily' | 'weekly' | 'monthly',
+    reminderRepeatInterval: '1',
     projectId: '',
     responsiblePersonId: '',
-    costAmount: ''
+    costAmount: '',
+    costDate: '',
+    completeWhenChecklistDone: false
   });
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]),
     [dependencies, setDependencies] = useState<TaskDependency[]>([]),
@@ -1053,9 +1061,13 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
       priority: task?.priority || 'medium',
       dueDate: newDate || task?.dueDate || '',
       reminderAt: reminderInputValue(task?.reminderAt),
+      reminderRepeat: task?.reminderRepeat || 'none',
+      reminderRepeatInterval: String(task?.reminderRepeatInterval || 1),
       projectId: task?.projectId || '',
       responsiblePersonId: task?.responsiblePersonId || '',
-      costAmount: task?.costAmount === null || task?.costAmount === undefined ? '' : String(task.costAmount)
+      costAmount: task?.costAmount === null || task?.costAmount === undefined ? '' : String(task.costAmount),
+      costDate: task?.costDate || '',
+      completeWhenChecklistDone: Boolean(task?.completeWhenChecklistDone)
     });
     setChecklist([]);
     setDependencies([]);
@@ -1112,7 +1124,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
   const addChecklist = () => {
     const description = checklistText.trim();
     if (!description) return;
-    setChecklist((value) => [...value, { description, completed: false, required: true, position: value.length, costAmount: null }]);
+    setChecklist((value) => [...value, { description, completed: false, required: true, position: value.length, costAmount: null, dueDate: null }]);
     setChecklistText('');
   };
   const addDependency = () => {
@@ -1239,9 +1251,13 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
         priority: editor.priority,
         dueDate: editor.dueDate || null,
         reminderAt: editor.reminderAt ? new Date(editor.reminderAt).toISOString() : null,
+        reminderRepeat: editor.reminderAt ? editor.reminderRepeat : 'none',
+        reminderRepeatInterval: Math.max(1, Number(editor.reminderRepeatInterval) || 1),
         projectId: editor.projectId || null,
         responsiblePersonId: editor.responsiblePersonId || null,
-        costAmount: editor.costAmount === '' ? null : Number(editor.costAmount.replace(',', '.'))
+        costAmount: editor.costAmount === '' ? null : Number(editor.costAmount.replace(',', '.')),
+        costDate: editor.costAmount === '' ? null : editor.costDate || null,
+        completeWhenChecklistDone: editor.completeWhenChecklistDone
       };
       let taskId = task?.id || createdTaskId.current;
       if (!taskId) {
@@ -1378,17 +1394,24 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
             <TextField fullWidth label="Due date" type="date" value={editor.dueDate} onChange={(event) => setEditor((value) => ({ ...value, dueDate: event.target.value }))} slotProps={{ inputLabel: { shrink: true } }} />
             <TextField fullWidth label="Reminder date and time" type="datetime-local" value={editor.reminderAt} onChange={(event) => setEditor((value) => ({ ...value, reminderAt: event.target.value }))} helperText="Leave empty for no scheduled notification." slotProps={{ inputLabel: { shrink: true } }} />
           </Stack>
-          <TextField
-            label={`Task cost (${currencyCode})`}
-            type="number"
-            value={editor.costAmount}
-            placeholder="N/A"
-            helperText="Leave empty when no task-level cost applies. Checklist costs are added separately."
-            onChange={(event) => setEditor((value) => ({ ...value, costAmount: event.target.value }))}
-            slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
-          />
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="subtitle1" fontWeight={700}>Notification schedule</Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} mt={1}>
+              <TextField select fullWidth label="Repeat" value={editor.reminderRepeat} disabled={!editor.reminderAt} onChange={(event) => setEditor((value) => ({ ...value, reminderRepeat: event.target.value as typeof value.reminderRepeat }))}>
+                <MenuItem value="none">Does not repeat</MenuItem><MenuItem value="daily">Daily</MenuItem><MenuItem value="weekly">Weekly</MenuItem><MenuItem value="monthly">Monthly</MenuItem>
+              </TextField>
+              {editor.reminderRepeat !== 'none' && <TextField fullWidth type="number" label={`Repeat every ${reminderRepeatUnit(editor.reminderRepeat)}`} value={editor.reminderRepeatInterval} onChange={(event) => setEditor((value) => ({ ...value, reminderRepeatInterval: event.target.value }))} slotProps={{ htmlInput: { min: 1, max: 365, step: 1 } }}/>}
+            </Stack>
+            <Typography variant="caption" color="text.secondary">Recurring reminders continue until the task is completed, cancelled, or archived.</Typography>
+          </Paper>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField fullWidth label={`Task cost (${currencyCode})`} type="number" value={editor.costAmount} placeholder="N/A" helperText="Checklist costs are added separately." onChange={(event) => setEditor((value) => ({ ...value, costAmount: event.target.value, costDate: event.target.value && !value.costDate ? new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10) : value.costDate }))} slotProps={{ htmlInput: { min: 0, step: 0.01 } }}/>
+            <TextField fullWidth label="Cost date" type="date" value={editor.costDate} disabled={!editor.costAmount} helperText="Used in financial reports." onChange={(event) => setEditor((value) => ({ ...value, costDate: event.target.value }))} slotProps={{ inputLabel: { shrink: true } }}/>
+          </Stack>
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Typography variant="h6">Checklist</Typography>
+            <FormControlLabel sx={{ mt: .5 }} control={<Switch checked={editor.completeWhenChecklistDone} onChange={(event) => setEditor((value) => ({ ...value, completeWhenChecklistDone: event.target.checked }))}/>} label="Complete task automatically when every checklist item is done"/>
+            <Typography variant="caption" color="text.secondary" display="block">If an automatically completed checklist item is reopened, the task returns to In progress.</Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} my={1}>
               <TextField
                 fullWidth
@@ -1432,6 +1455,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
                   <Box />
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
                     <TextField size="small" type="number" label={`Cost (${currencyCode})`} placeholder="N/A" value={item.costAmount ?? ''} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, costAmount: event.target.value === '' ? null : Number(event.target.value) } : entry)))} slotProps={{ htmlInput: { min: 0, step: 0.01 } }} sx={{ width: { xs: '100%', sm: 150 } }} />
+                    <TextField size="small" type="date" label="Checklist date" value={item.dueDate || ''} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, dueDate: event.target.value || null } : entry)))} slotProps={{ inputLabel: { shrink: true } }} sx={{ width: { xs: '100%', sm: 175 } }}/>
                     <FormControlLabel control={<Checkbox size="small" checked={item.required} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, required: event.target.checked } : entry)))} />} label="Required" />
                   </Stack>
                   <Box />
