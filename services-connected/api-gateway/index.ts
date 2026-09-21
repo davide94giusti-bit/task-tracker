@@ -12,7 +12,7 @@ import type {
   Fetcher,
   WorkerHandler,
 } from "../_shared/types";
-import { PersonShareChecklistUpdate, PersonShareComment, PersonShareProjectPersonMutation, PersonShareTaskComplete, PersonShareVerification } from "../../packages/connected-contracts";
+import { PersonShareChecklistMutation, PersonShareChecklistUpdate, PersonShareComment, PersonShareProjectPersonMutation, PersonShareTaskComplete, PersonShareTaskMutation, PersonShareVerification } from "../../packages/connected-contracts";
 interface Env extends BaseEnv {
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
@@ -200,6 +200,8 @@ export default <WorkerHandler<Env>>{
         "/v1/public/person-checklist": "/public/person-checklist",
         "/v1/public/person-complete": "/public/person-complete",
         "/v1/public/person-comment": "/public/person-comment",
+        "/v1/public/person-task-mutation": "/public/person-task-mutation",
+        "/v1/public/person-checklist-mutation": "/public/person-checklist-mutation",
         "/v1/public/person-project-person": "/public/person-project-person",
       };
       if (["/v1/public/person-verification/request", "/v1/public/person-verification/verify"].includes(url.pathname) && request.method === "POST") {
@@ -220,11 +222,13 @@ export default <WorkerHandler<Env>>{
         const shareId = await verifyShareToken(token, env.INTERNAL_SERVICE_TOKEN);
         const publicPayload = { ...payload };
         delete publicPayload.token;
-        if (["/v1/public/person-checklist", "/v1/public/person-complete", "/v1/public/person-comment", "/v1/public/person-project-person"].includes(url.pathname))
+        if (["/v1/public/person-checklist", "/v1/public/person-complete", "/v1/public/person-comment", "/v1/public/person-task-mutation", "/v1/public/person-checklist-mutation", "/v1/public/person-project-person"].includes(url.pathname))
           await verifyVerification(request.headers.get("x-share-verification") || "", shareId, env.INTERNAL_SERVICE_TOKEN);
         const mutation = url.pathname === "/v1/public/person-checklist" ? PersonShareChecklistUpdate.parse({ itemId: payload.itemId, completed: payload.completed, expectedVersion: payload.expectedVersion })
           : url.pathname === "/v1/public/person-complete" ? PersonShareTaskComplete.parse({ taskId: payload.taskId, expectedVersion: payload.expectedVersion })
           : url.pathname === "/v1/public/person-comment" ? PersonShareComment.parse({ taskId: payload.taskId, comment: payload.comment })
+          : url.pathname === "/v1/public/person-task-mutation" ? PersonShareTaskMutation.parse(publicPayload)
+          : url.pathname === "/v1/public/person-checklist-mutation" ? PersonShareChecklistMutation.parse(publicPayload)
           : url.pathname === "/v1/public/person-project-person" ? PersonShareProjectPersonMutation.parse(publicPayload) : payload;
         const result = await call(env.DATA, publicRoutes[url.pathname], env, undefined, {
           method: "POST",
