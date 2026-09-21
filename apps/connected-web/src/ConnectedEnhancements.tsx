@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
+import { Alert, Avatar, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { Add, ArrowBack, AttachFile, Call, CheckCircle, Close, Delete, Edit, Email, Link as LinkIcon, NotificationsActive, OpenInNew, Person as PersonIcon, Refresh, TableRows, ViewModule, WhatsApp } from '@mui/icons-material';
 import { api } from './api';
 import { AccessibleTextField as TextField } from './AccessibleTextField';
@@ -730,6 +730,7 @@ type TaskDetailsPayload = {
   task: Task;
   checklist: ChecklistItem[];
   dependencies: TaskDependency[];
+  activities: { id: string; eventType: string; summary: string; details?: { comment?: string }; createdAt: string; authorDisplayName?: string | null }[];
 };
 
 export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, onDeleted, mobile, refreshToken = 0 }: { task: Task | null; open: boolean; onClose: () => void; onEdit: (task: Task) => void; onCompleted: () => void; onDeleted: () => void; mobile: boolean; refreshToken?: number }) {
@@ -959,6 +960,27 @@ export function TaskDetailsDialog({ task, open, onClose, onEdit, onCompleted, on
                 </Stack>
               </Paper>
               {!!attachments.length && <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="h6">Files and links</Typography><Stack spacing={0.5} mt={1}>{attachments.map((attachment) => <Button key={attachment.id} startIcon={attachment.mimeType === 'text/uri-list' ? <LinkIcon /> : <AttachFile />} endIcon={<OpenInNew />} onClick={() => void openAttachment(attachment)} sx={{ justifyContent: 'flex-start' }}>{attachment.displayName}</Button>)}</Stack></Paper>}
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="h6">Activity</Typography>
+                <Stack spacing={1.5} mt={1.5}>
+                  {details?.activities?.map((activity) => {
+                    const author = activity.authorDisplayName || (activity.eventType === 'external_collaboration' ? 'Shared collaborator' : 'Task Tracker');
+                    const initials = author.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
+                    return <Stack key={activity.id} direction="row" spacing={1.25} alignItems="flex-start">
+                      <Avatar sx={{ width: 32, height: 32, fontSize: 12, bgcolor: activity.eventType === 'external_collaboration' ? 'secondary.main' : 'primary.main' }}>{initials}</Avatar>
+                      <Box minWidth={0} flex={1}>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={0.25}>
+                          <Typography fontWeight={700}>{activity.summary}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>{new Date(activity.createdAt).toLocaleString()}</Typography>
+                        </Stack>
+                        {activity.authorDisplayName && <Typography variant="caption" color="text.secondary">by {activity.authorDisplayName}</Typography>}
+                        {activity.details?.comment && <Typography mt={0.5} sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{activity.details.comment}</Typography>}
+                      </Box>
+                    </Stack>;
+                  })}
+                  {!details?.activities?.length && <Typography color="text.secondary">No activity has been recorded for this task yet.</Typography>}
+                </Stack>
+              </Paper>
             </Stack>
           )}
         </DialogContent>

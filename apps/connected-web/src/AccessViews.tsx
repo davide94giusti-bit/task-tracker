@@ -5,7 +5,7 @@ import { api } from './api';
 import { signOut, updatePassword } from './auth';
 import { AccessibleTextField as TextField } from './AccessibleTextField';
 
-type Invite = { id: string; email: string; status: string; invitedAt: string; expiresAt: string; acceptedAt?: string | null; acceptedUserId?: string | null };
+type Invite = { id: string; email: string; displayName?: string | null; status: string; invitedAt: string; expiresAt: string; acceptedAt?: string | null; acceptedUserId?: string | null };
 type Usage = { acceptedUsers: number; pendingInvitations: number; userLimit: number; pendingDeliveries: number; failedNotifications: number; emailsSentToday: number };
 
 export function PasswordSetup({ mode, onDone }: { mode: 'invite' | 'recovery'; onDone: () => void }) {
@@ -40,21 +40,21 @@ export function UsersAccessView() {
       const group = grouped[section.key] || [];
       return <Accordion key={section.key} variant="outlined" disableGutters>
         <AccordionSummary expandIcon={<ExpandMore/>}><Stack direction="row" alignItems="center" spacing={1}><Typography variant="h6">{section.title}</Typography><Chip size="small" color={section.color} label={group.length}/></Stack></AccordionSummary>
-        <AccordionDetails>{!group.length ? <Typography color="text.secondary" variant="body2">No {section.title.toLowerCase()}.</Typography> : <Stack spacing={1}>{group.map(invite => <Card key={invite.id} variant="outlined"><CardContent><Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={1}><Box><Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{invite.email}</Typography><Stack direction="row" spacing={1} alignItems="center" mt={0.5}><Chip size="small" label={invite.status} color={invite.status === 'accepted' ? 'success' : invite.status === 'pending' ? 'warning' : 'default'} /><Typography variant="body2" color="text.secondary">Invited {new Date(invite.invitedAt).toLocaleDateString()}</Typography></Stack></Box><Stack direction="row">{invite.status === 'pending' && <><Button disabled={busy} onClick={() => act('/access/resend', { invitationId: invite.id })}>Resend</Button><Button color="error" disabled={busy} onClick={() => setConfirm({ invite, action: 'revoke' })}>Revoke</Button></>}{invite.status === 'accepted' && invite.acceptedUserId && <Button color="warning" disabled={busy} onClick={() => setConfirm({ invite, action: 'disable' })}>Disable access</Button>}{invite.status === 'disabled' && invite.acceptedUserId && <Button disabled={busy} onClick={() => void act('/access/enable', { userId: invite.acceptedUserId })}>Re-enable</Button>}</Stack></Stack></CardContent></Card>)}</Stack>}</AccordionDetails>
+        <AccordionDetails>{!group.length ? <Typography color="text.secondary" variant="body2">No {section.title.toLowerCase()}.</Typography> : <Stack spacing={1}>{group.map(invite => <Card key={invite.id} variant="outlined"><CardContent><Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={1}><Box><Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{invite.displayName || invite.email}</Typography>{invite.displayName && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{invite.email}</Typography>}<Stack direction="row" spacing={1} alignItems="center" mt={0.5}><Chip size="small" label={invite.status} color={invite.status === 'accepted' ? 'success' : invite.status === 'pending' ? 'warning' : 'default'} /><Typography variant="body2" color="text.secondary">Invited {new Date(invite.invitedAt).toLocaleDateString()}</Typography></Stack></Box><Stack direction="row">{invite.status === 'pending' && <><Button disabled={busy} onClick={() => act('/access/resend', { invitationId: invite.id })}>Resend</Button><Button color="error" disabled={busy} onClick={() => setConfirm({ invite, action: 'revoke' })}>Revoke</Button></>}{invite.status === 'accepted' && invite.acceptedUserId && <Button color="warning" disabled={busy} onClick={() => setConfirm({ invite, action: 'disable' })}>Disable access</Button>}{invite.status === 'disabled' && invite.acceptedUserId && <Button disabled={busy} onClick={() => void act('/access/enable', { userId: invite.acceptedUserId })}>Re-enable</Button>}</Stack></Stack></CardContent></Card>)}</Stack>}</AccordionDetails>
       </Accordion>;
     })}
     <Dialog open={!!confirm} onClose={() => setConfirm(null)}><DialogTitle>{confirm?.action === 'disable' ? 'Disable user access?' : 'Revoke invitation?'}</DialogTitle><DialogContent>{confirm?.action === 'disable' ? 'The user will be signed out and unable to access their workspace until re-enabled. Their data is preserved.' : 'This invitation will no longer be usable.'}</DialogContent><DialogActions><Button onClick={() => setConfirm(null)}>Cancel</Button><Button color="error" onClick={() => { const pending = confirm; setConfirm(null); if (!pending) return; if (pending.action === 'disable' && pending.invite.acceptedUserId) void act('/access/disable', { userId: pending.invite.acceptedUserId }); else void act('/access/revoke', { invitationId: pending.invite.id }); }}>{confirm?.action === 'disable' ? 'Disable access' : 'Revoke'}</Button></DialogActions></Dialog>
   </Stack>;
 }
 
-export function AccountSecurity() {
+export function AccountSecurity({ onProfileUpdated }: { onProfileUpdated?: (profile: { displayName: string; email: string }) => void }) {
   const [password, setPassword] = useState(''), [displayName, setDisplayName] = useState(''), [email, setEmail] = useState(''), [busy, setBusy] = useState(false), [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   useEffect(() => {
     api<{ displayName?: string | null; email?: string | null }>('/access/state').then(current => { setDisplayName(current.displayName || ''); setEmail(current.email || ''); }).catch(reason => setNotice({ text: reason.message, error: true }));
   }, []);
   const saveName = async () => {
     setBusy(true); setNotice(null);
-    try { const result = await api<{ displayName: string }>('/access/profile', { method: 'POST', body: { displayName: displayName.trim() } }); setDisplayName(result.displayName); setNotice({ text: 'Display name updated.' }); }
+    try { const result = await api<{ displayName: string }>('/access/profile', { method: 'POST', body: { displayName: displayName.trim() } }); setDisplayName(result.displayName); onProfileUpdated?.({ displayName: result.displayName, email }); setNotice({ text: 'Display name updated.' }); }
     catch (reason) { setNotice({ text: (reason as Error).message, error: true }); }
     finally { setBusy(false); }
   };

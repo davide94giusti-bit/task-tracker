@@ -124,7 +124,7 @@ export default <WorkerHandler<Env>>{
       }
       if (url.pathname === "/details") {
         const taskId = Uuid.parse(url.searchParams.get("taskId"));
-        const [taskRows, checklist, dependencies] = await Promise.all([
+        const [taskRows, checklist, activities, dependencies] = await Promise.all([
           call(env.DATA, "/select", env, context, {
             method: "POST",
             body: JSON.stringify({
@@ -141,6 +141,13 @@ export default <WorkerHandler<Env>>{
               limit: 500,
             }),
           }),
+          call(env.DATA, "/rpc", env, context, {
+            method: "POST",
+            body: JSON.stringify({
+              name: "task_activity_timeline",
+              args: { p_task_id: taskId },
+            }),
+          }).catch(() => []),
           call(env.DATA, "/select", env, context, {
             method: "POST",
             body: JSON.stringify({
@@ -181,7 +188,7 @@ export default <WorkerHandler<Env>>{
           },
         );
         return json(
-          { task, checklist, dependencies: enrichedDependencies },
+          { task, checklist, dependencies: enrichedDependencies, activities },
           200,
           requestId,
         );

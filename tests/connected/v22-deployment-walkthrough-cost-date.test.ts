@@ -12,7 +12,7 @@ describe('coordinated deployment and refined connected UI', () => {
   it('deploys backend Workers before the Pages frontend on main', () => {
     expect(workflow).toContain('Deploy Workers, then Pages');
     expect(workflow).toContain('CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}');
-    expect(deploy.indexOf("['data','identity-access','tasks'")).toBeLessThan(deploy.indexOf("'pages','deploy'"));
+    expect(deploy.indexOf("['data', 'identity-access', 'tasks'")).toBeLessThan(deploy.indexOf("['wrangler', 'pages', 'deploy'"));
   });
 
   it('fails explicitly when a deployed data service drops the cost date', () => {
