@@ -1267,30 +1267,28 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
         costDate: editor.costAmount === '' ? null : editor.costDate || null,
         completeWhenChecklistDone: editor.completeWhenChecklistDone
       };
+      const persistTask = async (payload: typeof body & { id?: string; status?: string }) => {
+        const saved = await api<Task>('/tasks/save', {
+          method: 'POST',
+          timeoutMs: 60_000,
+          body: payload
+        });
+        if ((payload.costDate ?? null) !== (saved.costDate ?? null))
+          throw new Error('The cost date was not saved because the connected Workers are out of date. Deploy Connected v16.14.3, then save this task again.');
+        return saved;
+      };
       let taskId = task?.id || createdTaskId.current;
       if (!taskId) {
         const initialStatus = (checklist.length || dependencies.length) && editor.status === 'completed' ? 'not_started' : editor.status;
-        const created = await api<Task>('/tasks/save', {
-          method: 'POST',
-          timeoutMs: 60_000,
-          body: { ...body, status: initialStatus }
-        });
+        const created = await persistTask({ ...body, status: initialStatus });
         taskId = created.id;
         createdTaskId.current = created.id;
         await saveRelated(taskId);
         if (initialStatus !== editor.status)
-          await api('/tasks/save', {
-            method: 'POST',
-            timeoutMs: 60_000,
-            body: { id: taskId, ...body }
-          });
+          await persistTask({ id: taskId, ...body });
       } else {
         await saveRelated(taskId);
-        await api('/tasks/save', {
-          method: 'POST',
-          timeoutMs: 60_000,
-          body: { id: taskId, ...body }
-        });
+        await persistTask({ id: taskId, ...body });
       }
       onSaved();
     } catch (reason) {
@@ -1520,6 +1518,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
                 <input
                   id="task-file-upload"
                   name="taskFiles"
+                  aria-label="Task files"
                   hidden
                   multiple
                   type="file"
