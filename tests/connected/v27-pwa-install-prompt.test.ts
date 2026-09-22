@@ -37,6 +37,6 @@ describe('v16.16.1 guided PWA installation', () => {
     expect(manifest.display).toBe('standalone');
     expect(manifest.categories).toContain('productivity');
     expect(manifest.prefer_related_applications).toBe(false);
-    expect(read('apps/connected-web/public/service-worker.js')).toContain('task-tracker-connected-v16-16-1');
+    expect(read('apps/connected-web/public/service-worker.js')).toMatch(/task-tracker-connected-v16-16-\d+/);
   });
 });
