@@ -31,8 +31,8 @@ describe('v16.16.2 shared portal PWA notification onboarding', () => {
   it('refreshes permission state after device settings or app switching', () => {
     expect(portal).toContain("document.addEventListener('visibilitychange', refreshPermission)");
     expect(portal).toContain("window.addEventListener('focus', refreshPermission)");
-    expect(read('apps/connected-web/public/service-worker.js')).toMatch(/task-tracker-connected-v16-16-\d+/);
-    expect(read('packages/connected-contracts/release.ts')).toMatch(/'16\.16\.\d+'/);
+    expect(read('apps/connected-web/public/service-worker.js')).toMatch(/task-tracker-connected-v16-\d+-\d+/);
+    expect(read('packages/connected-contracts/release.ts')).toMatch(/'16\.\d+\.\d+'/);
   });
 
   it('returns an installed Home Screen app to the originating shared link', () => {
