@@ -61,6 +61,7 @@ export default <WorkerHandler<Env>>{
             page: raw.page ? Number(raw.page) : undefined,
             pageSize: raw.pageSize ? Number(raw.pageSize) : undefined,
             blocked: raw.blocked === "true" ? true : undefined,
+            attention: raw.attention === "true" ? true : undefined,
           });
         const result = (await call(env.DATA, "/tasks/list", env, context, {
             method: "POST",

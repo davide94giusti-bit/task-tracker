@@ -525,6 +525,17 @@ function DashboardSection({ title, description, children }: { title: string; des
   </Card>;
 }
 
+function DashboardMetricCard({ label, value, disabled = false, onClick }: { label: string; value: number | string; disabled?: boolean; onClick: () => void }) {
+  return <Card variant="outlined">
+    <CardActionArea onClick={onClick} disabled={disabled}>
+      <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
+        <Typography variant="body2" color="text.secondary">{label}</Typography>
+        <Typography variant="h5">{value}</Typography>
+      </CardContent>
+    </CardActionArea>
+  </Card>;
+}
+
 export function EnhancedDashboardView({ openFilter, openChecklistFilter, openTask, refreshToken = 0 }: { openFilter: (title: string, query: Record<string, unknown>) => void; openChecklistFilter: (title: string, scope: string) => void; openTask: (task: Task) => void; refreshToken?: number }) {
   const [data, setData] = useState<Dashboard | null>(null),
     [checklists, setChecklists] = useState<ChecklistWorkspaceResponse | null>(null),
@@ -541,15 +552,15 @@ export function EnhancedDashboardView({ openFilter, openChecklistFilter, openTas
     void api<ChecklistWorkspaceResponse>(`/tasks/checklists?${new URLSearchParams({ scope: 'open', today: localDateKey(), pageSize: '1' })}`).then(setChecklists).catch(reason => setChecklistError(reason.message));
   }, [refreshToken]);
   const cards = [
+    ['Open', 'active', {}],
     ['Overdue', 'overdue', { due: 'overdue' }],
     ['Due today', 'today', { due: 'today' }],
     ['Next 7 days', 'next7', { due: 'next7' }],
-    ['Critical', 'critical', { priority: 'critical' }],
-    ['Blocked', 'blocked', { blocked: 'true' }],
-    ['Waiting', 'waiting', { status: 'waiting' }]
+    ['Completed', 'completed', { view: 'completed' }],
+    ['Needs attention', 'needsAttention', { attention: 'true' }]
   ] as const;
   const checklistCards = [
-    ['Open', 'open'], ['Overdue', 'overdue'], ['Due today', 'today'], ['Next 7 days', 'next7'], ['Required', 'required'], ['Completed', 'completed']
+    ['Open', 'open'], ['Overdue', 'overdue'], ['Due today', 'today'], ['Next 7 days', 'next7'], ['Completed', 'completed'], ['Required', 'required']
   ] as const;
   if (error) return <Alert severity="error">{error}</Alert>;
   return (
@@ -566,24 +577,13 @@ export function EnhancedDashboardView({ openFilter, openChecklistFilter, openTas
           <Box><Typography variant="overline" fontWeight={800}>Tasks</Typography>
           <Box className="compact-metric-grid">
             {cards.map(([label, key, query]) => (
-              <Card key={key}>
-                <CardActionArea onClick={() => openFilter(label, query)}>
-                  <CardContent>
-                    <Stack direction="row" justifyContent="space-between">
-                      <Box>
-                        <Typography color="text.secondary">{label}</Typography>
-                        <Typography variant="h5">{data.counts[key] || 0}</Typography>
-                      </Box>
-                    </Stack>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
+              <DashboardMetricCard key={key} label={label} value={data.counts[key] || 0} onClick={() => openFilter(label, query)} />
             ))}
           </Box></Box>
           <Box><Typography variant="overline" fontWeight={800}>Checklist items</Typography>
           {checklistError && <Alert severity="warning" sx={{ mb: 1 }}>Checklist metrics are temporarily unavailable. Deploy the current Tasks Worker and API Gateway together.</Alert>}
           <Box className="compact-metric-grid">
-            {checklistCards.map(([label, key]) => <Card key={key} variant="outlined"><CardActionArea onClick={() => openChecklistFilter(label, key)} disabled={!checklists}><CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}><Typography variant="body2" color="text.secondary">{label}</Typography><Typography variant="h5">{checklists ? checklists.metrics[key] : '—'}</Typography></CardContent></CardActionArea></Card>)}
+            {checklistCards.map(([label, key]) => <DashboardMetricCard key={key} label={label} value={checklists ? checklists.metrics[key] : '—'} disabled={!checklists} onClick={() => openChecklistFilter(label, key)} />)}
           </Box></Box>
           </Box>
           <DashboardSection title="Overall workload" description="Average progress across active tasks">

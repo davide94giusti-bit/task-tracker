@@ -85,6 +85,7 @@ export const TaskQuery = z
     priority: Priority.optional(),
     status: TaskStatus.optional(),
     blocked: z.boolean().optional(),
+    attention: z.boolean().optional(),
     date: IsoDate.optional(),
     dependencyRole: z.enum(["prerequisite"]).optional(),
     page: z.number().int().positive().default(1),
