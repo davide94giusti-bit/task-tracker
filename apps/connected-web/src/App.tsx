@@ -10,6 +10,7 @@ import { EnhancedDashboardView, EnhancedTasksView, NotificationBell, TaskDetails
 import { DeadlinePressureCard, localDateKey } from './DeadlineAttention';
 import { DependencyLoadView } from './OperationalViews';
 import { PublicPersonTasks } from './PublicPersonTasks';
+import { PwaInstallBanner, PwaInstallCard, PwaInstallInstructions, usePwaInstall } from './PwaInstallPrompt';
 import { UserManualView } from './UserManualView';
 import type { Dashboard, DeadlinePressure, Person, Project, Task, View } from './types';
 // React 19 no longer exports JSX globally; this local bridge types stored icon elements.
@@ -359,19 +360,25 @@ function applicationServerKey(value: string) { const padding = '='.repeat((4 - v
 type NotificationPreferences={emailEnabled:boolean;pushEnabled:boolean;reminder:boolean;dueToday:boolean;overdue:boolean;dailySummary:boolean;timezone:string;quietStart:string;quietEnd:string;currencyCode:string};
 type NotificationReadiness={email:{providerConfigured:boolean;accountAddressAvailable:boolean;enabled:boolean};push:{providerConfigured:boolean;enabled:boolean;activeSubscriptions:number};scheduler:{cadenceMinutes:number;explicitTaskReminders:boolean;dueTodayAutomation:boolean;overdueAutomation:boolean;dailySummaryAutomation:boolean};deliveries:{pending:number;failed:number;delivered:number;latest:{status:string;createdAt:string;deliveredAt?:string|null;errorCode?:string|null}|null}};
 const defaultPreferences:NotificationPreferences={emailEnabled:false,pushEnabled:false,reminder:true,dueToday:true,overdue:true,dailySummary:false,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',quietStart:'22:00',quietEnd:'07:00',currencyCode:'CHF'};
-function SettingsView() { const [supported] = useState('serviceWorker' in navigator && 'PushManager' in window), [message, setMessage] = useState(''), [busy, setBusy] = useState(false), [preferences,setPreferences]=useState<NotificationPreferences>(defaultPreferences),[readiness,setReadiness]=useState<NotificationReadiness|null>(null);
+function SettingsView() { const install = usePwaInstall(), [supported] = useState('serviceWorker' in navigator && 'PushManager' in window), [message, setMessage] = useState(''), [busy, setBusy] = useState(false), [preferences,setPreferences]=useState<NotificationPreferences>(defaultPreferences),[readiness,setReadiness]=useState<NotificationReadiness|null>(null);
 const loadReadiness=()=>api<NotificationReadiness>('/notifications/readiness').then(setReadiness).catch(error=>setMessage(error.message));
 useEffect(()=>{void Promise.all([api<NotificationPreferences|null>('/preferences').then(value=>value&&setPreferences({...defaultPreferences,...value})),loadReadiness()]).catch(error=>setMessage(error.message))},[]);
 const savePreferences=async(next:NotificationPreferences)=>{setPreferences(next);await api('/preferences',{method:'POST',body:next})};
 return <>
 <PageTitle title="Settings" subtitle="Notifications, email, timezone, and connected account."/>
 <Stack spacing={2}>
+	<PwaInstallCard notificationPermission={'Notification' in window ? Notification.permission : 'unsupported'}/>
 	<Card>
 	<CardContent>
 	<Typography variant="h6">Live notifications</Typography>
 	<Typography color="text.secondary">iPhone requires iOS 16.4 or later and the PWA added to the Home Screen.</Typography>
 	<Stack direction={{xs:'column',sm:'row'}} spacing={1} mt={2} alignItems={{sm:'center'}}>
-	<Button variant="contained" disabled={!supported || busy || preferences.pushEnabled} onClick={async () => {
+	<Button variant="contained" disabled={busy || preferences.pushEnabled || (!supported && !install.requiresInstallForPush)} onClick={async () => {
+    if (install.requiresInstallForPush) {
+        await install.requestInstall();
+        setMessage('Install Task Tracker, open it from your Home Screen, then return here to enable notifications.');
+        return;
+    }
     setBusy(true);
     try {
         if(!import.meta.env.VITE_VAPID_PUBLIC_KEY)throw new Error('The Pages VAPID public key is missing.');
@@ -388,7 +395,7 @@ return <>
     }
     catch (error) { setMessage((error as Error).message); }
     finally { setBusy(false); }
-	}}>{preferences.pushEnabled ? 'Notifications enabled' : 'Enable notifications'}</Button>
+	}}>{preferences.pushEnabled ? 'Notifications enabled' : install.requiresInstallForPush ? 'Install Task Tracker first' : 'Enable notifications'}</Button>
 	<Button variant="outlined" disabled={!supported || busy || !preferences.pushEnabled} onClick={async()=>{setBusy(true);try{const result=await api<{sent:number}>('/notifications/test-push',{method:'POST',body:{}});setMessage(`Notification test sent to ${result.sent} device${result.sent===1?'':'s'}.`);await loadReadiness()}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}}>Send notification test</Button>
 	{preferences.pushEnabled && <Button color="inherit" size="small" disabled={busy} onClick={async()=>{setBusy(true);try{await savePreferences({...preferences,pushEnabled:false});await loadReadiness();setMessage('Live notifications disabled.')}catch(error){setMessage((error as Error).message)}finally{setBusy(false)}}}>Disable notifications</Button>}
 	</Stack>
@@ -415,7 +422,7 @@ return <>
 <Typography variant="body2">Reminder scheduler: every {readiness.scheduler.cadenceMinutes} minutes · explicit task reminders enabled.</Typography>
 <Typography variant="body2" color="text.secondary">Deliveries: {readiness.deliveries.delivered} delivered · {readiness.deliveries.pending} pending/retrying · {readiness.deliveries.failed} failed.</Typography>
 {readiness.deliveries.latest&&<Typography variant="caption" color="text.secondary">Latest delivery: {readiness.deliveries.latest.status} · {new Date(readiness.deliveries.latest.createdAt).toLocaleString()}{readiness.deliveries.latest.errorCode?` · ${readiness.deliveries.latest.errorCode}`:''}</Typography>}
-<Alert severity="info">Due-today, overdue, and daily-summary automation are not active yet. This version sends explicit task reminders configured in the task editor.</Alert>
+<Alert severity="info">Explicit task reminders support push/email. Checklist items due today receive an in-app notification; checklist push/email, overdue automation, and daily summaries remain follow-up work.</Alert>
 </Stack>}
 	</CardContent>
 	</Card>
@@ -487,7 +494,7 @@ return <ThemeProvider theme={theme}><CssBaseline/>
 <ListItemIcon>{n.icon}</ListItemIcon>
 <ListItemText primary={n.label}/>
 </ListItemButton>)}</Box>)}</List>
-</Drawer>}<Box component="main" sx={{ pt: { xs: '82px', md: '96px' }, pl: { xs: 2, md: desktopNav ? '292px' : 4 }, pr: { xs: 2, md: 4 }, pb: 4, maxWidth: 1800 }}>{filter && <Button onClick={() => setFilter(null)}>← Back</Button>}{body}</Box>{mobile && <Paper elevation={8} className="bottom-nav">
+</Drawer>}<Box component="main" sx={{ pt: { xs: '82px', md: '96px' }, pl: { xs: 2, md: desktopNav ? '292px' : 4 }, pr: { xs: 2, md: 4 }, pb: 4, maxWidth: 1800 }}><PwaInstallBanner hidden={view === 'settings'}/>{filter && <Button onClick={() => setFilter(null)}>← Back</Button>}{body}</Box>{mobile && <Paper elevation={8} className="bottom-nav">
 <BottomNavigation value={view} onChange={(_, v) => { if (v === 'more') { releaseFocus(); setDrawer(true); } else navigate(v); }} showLabels>
 <BottomNavigationAction value="dashboard" label="Dashboard" icon={<DashboardIcon />}/>
 <BottomNavigationAction value="today" label="Today" icon={<Today />}/>
@@ -512,5 +519,6 @@ return <ThemeProvider theme={theme}><CssBaseline/>
 </Drawer>
 <TaskDetailsDialog task={task} open={!!task} mobile={mobile} refreshToken={refreshToken} onClose={() => setTask(null)} onEdit={nextTask => { releaseFocus(); setEditingTask(nextTask); }} onCompleted={() => setRefreshToken(value => value + 1)} onDeleted={() => { setTask(null); setRefreshToken(value => value + 1); }}/>
 <TaskEditorDialog task={editingTask} newDate={newDate} open={!!editingTask || newDate !== null} mobile={mobile} onClose={() => { setEditingTask(null); setNewDate(null); }} onSaved={() => { setEditingTask(null); setNewDate(null); setRefreshToken(value => value + 1); }}/>
+<PwaInstallInstructions/>
 </Box>
 </ThemeProvider>; }
