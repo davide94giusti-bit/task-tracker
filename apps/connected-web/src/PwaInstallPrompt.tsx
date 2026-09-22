@@ -26,6 +26,7 @@ type PwaInstallContextValue = {
 };
 
 const PwaInstallContext = createContext<PwaInstallContextValue | null>(null);
+export const PWA_INSTALL_RETURN_PATH_KEY = 'task-tracker:pwa-install-return-path';
 
 export function PwaInstallProvider({ children }: { children: React.ReactNode }) {
   const [installed, setInstalled] = useState(standaloneMode);
@@ -36,6 +37,16 @@ export function PwaInstallProvider({ children }: { children: React.ReactNode }) 
   const platform = useMemo(() => detectPwaPlatform(navigator.userAgent, navigator.maxTouchPoints), []);
 
   useEffect(() => {
+    if (standaloneMode()) {
+      const returnPath = localStorage.getItem(PWA_INSTALL_RETURN_PATH_KEY);
+      if (returnPath?.startsWith('/shared-tasks?token=')) {
+        localStorage.removeItem(PWA_INSTALL_RETURN_PATH_KEY);
+        if (location.pathname !== '/shared-tasks') {
+          location.replace(returnPath);
+          return;
+        }
+      }
+    }
     const displayMode = window.matchMedia('(display-mode: standalone)');
     const refreshInstalled = () => setInstalled(standaloneMode());
     const capturePrompt = (event: Event) => {
