@@ -3,8 +3,8 @@ import { Alert, Avatar, Badge, Box, Button, Card, CardActionArea, CardContent, C
 import { Add, ArrowBack, AttachFile, Call, CheckCircle, Close, Delete, Edit, Email, ExpandLess, ExpandMore, Link as LinkIcon, NotificationsActive, OpenInNew, Person as PersonIcon, Refresh, TableRows, ViewModule, WhatsApp } from '@mui/icons-material';
 import { api } from './api';
 import { AccessibleTextField as TextField } from './AccessibleTextField';
-import { ChecklistAttentionPanel, DeadlinePressureCard } from './DeadlineAttention';
-import type { ChecklistItem, CostEntry, CostSummary, Dashboard, NotificationItem, Person, Project, Task, TaskAttachment, TaskDependency, View } from './types';
+import { ChecklistAttentionPanel, DeadlinePressureCard, localDateKey } from './DeadlineAttention';
+import type { ChecklistItem, ChecklistWorkspaceItem, ChecklistWorkspaceResponse, CostEntry, CostSummary, Dashboard, NotificationItem, Person, Project, Task, TaskAttachment, TaskDependency, View } from './types';
 
 function titleFor(view: View, override?: string) {
   if (override) return override;
@@ -12,7 +12,7 @@ function titleFor(view: View, override?: string) {
   return view[0].toUpperCase() + view.slice(1);
 }
 
-export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshToken = 0 }: { view: View; query?: Record<string, unknown>; title?: string; onOpen: (task: Task) => void; onNew: () => void; refreshToken?: number }) {
+export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshToken = 0, embedded = false }: { view: View; query?: Record<string, unknown>; title?: string; onOpen: (task: Task) => void; onNew: () => void; refreshToken?: number; embedded?: boolean }) {
   const [data, setData] = useState<{ items: Task[]; total: number } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]),
     [people, setPeople] = useState<Person[]>([]);
@@ -132,7 +132,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
   ));
   return (
     <>
-      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} gap={2} mb={3}>
+      {!embedded && <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} gap={2} mb={3}>
         <Box>
           <Typography variant="h4">{titleFor(view, title)}</Typography>
           <Typography color="text.secondary">{data ? `${data.total} matching tasks` : 'Loading validated cloud tasks'}</Typography>
@@ -140,7 +140,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
         <Button variant="contained" startIcon={<Add />} onClick={onNew}>
           New task
         </Button>
-      </Stack>
+      </Stack>}
       {view === 'today' && <ChecklistAttentionPanel onOpen={onOpen} refreshToken={refreshToken} />}
       {view === 'today' && <Typography variant="h5" mb={1}>Tasks due today</Typography>}
       <Paper variant="outlined" sx={{ p: 1.25, mb: 2 }}>
@@ -366,6 +366,41 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
   );
 }
 
+const checklistTask = (item: ChecklistWorkspaceItem): Task => ({ id: item.taskId, title: item.taskTitle, description: '', status: item.taskStatus, priority: item.taskPriority, dueDate: item.taskDueDate, projectId: item.projectId, projectName: item.projectName, responsiblePersonId: item.responsiblePersonId, responsiblePersonName: item.responsiblePersonName, calculatedProgress: 0, blocked: item.taskBlocked, version: item.taskVersion, updatedAt: '' });
+
+export function ChecklistWorkspaceView({ onOpen, refreshToken = 0, initialScope = 'open', title = 'All checklist', embedded = false }: { onOpen: (task: Task) => void; refreshToken?: number; initialScope?: string; title?: string; embedded?: boolean }) {
+  const [data, setData] = useState<ChecklistWorkspaceResponse | null>(null), [scope, setScope] = useState(initialScope), [search, setSearch] = useState(''), [error, setError] = useState(''), [pending, setPending] = useState<string | null>(null);
+  useEffect(() => setScope(initialScope), [initialScope]);
+  const load = useCallback(async () => { setError(''); try { setData(await api<ChecklistWorkspaceResponse>(`/tasks/checklists?${new URLSearchParams({ scope, search, today: localDateKey(), pageSize: '100' })}`)); } catch (reason) { setError((reason as Error).message); } }, [scope, search, refreshToken]);
+  useEffect(() => { void load(); }, [load]);
+  const toggle = async (item: ChecklistWorkspaceItem) => { setPending(item.id); setError(''); try { await api('/tasks/checklist/toggle', { method: 'POST', body: { itemId: item.id, completed: !item.completed, expectedVersion: item.version } }); window.dispatchEvent(new Event('task-tracker:deadline-change')); await load(); } catch (reason) { setError((reason as Error).message); } finally { setPending(null); } };
+  return <Stack spacing={2}>
+    {!embedded && <Box><Typography variant="h4">{title}</Typography><Typography color="text.secondary">Checklist items with their parent task, project, and responsibility context.</Typography></Box>}
+    <Paper variant="outlined" sx={{ p: 1.25 }}><Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'minmax(180px,240px) minmax(220px,1fr)' }, gap: 1 }}>
+      <TextField select size="small" label="Checklist view" value={scope} onChange={event => setScope(event.target.value)}><MenuItem value="all">All checklist items</MenuItem><MenuItem value="open">All open</MenuItem><MenuItem value="overdue">Overdue</MenuItem><MenuItem value="today">Due today</MenuItem><MenuItem value="next7">Next 7 days</MenuItem><MenuItem value="required">Required open</MenuItem><MenuItem value="completed">Completed</MenuItem></TextField>
+      <TextField size="small" label="Search checklist, task, or project" value={search} onChange={event => setSearch(event.target.value)} />
+    </Box></Paper>
+    {error && <Alert severity="error" action={<Button onClick={() => void load()}>Retry</Button>}>{error}</Alert>}
+    {!data && !error && <LinearProgress/>}
+    {data && <Typography variant="body2" color="text.secondary">{data.total} matching checklist items{data.total > data.items.length ? ` · showing first ${data.items.length}` : ''}</Typography>}
+    <Stack spacing={1}>{data?.items.map(item => <Card key={item.id} variant="outlined"><CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}><Stack direction={{ xs: 'column', sm: 'row' }} gap={1.25} alignItems={{ sm: 'center' }}>
+      <Checkbox checked={item.completed} disabled={pending === item.id} onChange={() => void toggle(item)} inputProps={{ 'aria-label': `${item.completed ? 'Reopen' : 'Complete'} checklist item ${item.description}` }} sx={{ minWidth: 44, minHeight: 44, alignSelf: { xs: 'flex-start', sm: 'center' } }}/>
+      <Box flex={1} minWidth={0}><Stack direction="row" gap={.5} flexWrap="wrap"><Chip size="small" label={item.completed ? 'Completed' : item.dueDate && item.dueDate < localDateKey() ? 'Overdue' : item.dueDate === localDateKey() ? 'Due today' : 'Open'} color={item.completed ? 'success' : item.dueDate && item.dueDate < localDateKey() ? 'error' : 'default'}/><Chip size="small" variant="outlined" label={item.required ? 'Required' : 'Optional'}/>{item.taskBlocked && <Chip size="small" color="warning" label="Blocked parent"/>}</Stack>
+      <Typography fontWeight={800} mt={.5}>{item.description}</Typography><Typography variant="body2"><strong>Task:</strong> {item.taskTitle}</Typography><Typography variant="body2" color="text.secondary"><strong>Project:</strong> {item.projectName} · <strong>Responsible:</strong> {item.responsiblePersonName}</Typography><Typography variant="caption" color="text.secondary">Checklist due {item.dueDate ? new Date(`${item.dueDate}T12:00:00`).toLocaleDateString() : 'No date'} · Parent {item.taskStatus.replaceAll('_', ' ')} · {item.taskPriority} priority{item.taskDueDate ? ` · task due ${new Date(`${item.taskDueDate}T12:00:00`).toLocaleDateString()}` : ''}</Typography></Box>
+      <Button variant="outlined" startIcon={<OpenInNew/>} sx={{ minHeight: 44 }} onClick={() => onOpen(checklistTask(item))}>Open task</Button>
+    </Stack></CardContent></Card>)}{data && !data.items.length && <Paper variant="outlined" sx={{ p: 3 }}><Typography>No checklist items match this view.</Typography></Paper>}</Stack>
+  </Stack>;
+}
+
+function WorkSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+  const [expanded, setExpanded] = useState(false);
+  return <Card><CardActionArea onClick={() => setExpanded(value => !value)} aria-expanded={expanded}><CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Box><Typography variant="h6">{title}</Typography><Typography variant="body2" color="text.secondary">{description}</Typography></Box>{expanded ? <ExpandLess/> : <ExpandMore/>}</Stack></CardContent></CardActionArea><Collapse in={expanded} unmountOnExit><Box sx={{ p: 2, pt: 1 }} onClick={event => event.stopPropagation()}>{children}</Box></Collapse></Card>;
+}
+
+export function WorkView({ onOpen, onNew, refreshToken = 0 }: { onOpen: (task: Task) => void; onNew: () => void; refreshToken?: number }) {
+  return <Stack spacing={2}><Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} gap={1}><Box><Typography variant="h4">Work</Typography><Typography color="text.secondary">Tasks and checklist items remain separate, with full parent context.</Typography></Box><Button variant="contained" startIcon={<Add/>} onClick={onNew}>New task</Button></Stack><WorkSection title="All tasks" description="Search, filter, sort, and open parent tasks."><EnhancedTasksView view="tasks" onOpen={onOpen} onNew={onNew} refreshToken={refreshToken} embedded/></WorkSection><WorkSection title="All checklist" description="Browse open, upcoming, undated, and completed checklist items."><ChecklistWorkspaceView onOpen={onOpen} refreshToken={refreshToken} embedded/></WorkSection></Stack>;
+}
+
 function CostAnalyticsCard({ onOpenTask, refreshToken = 0, embedded = false }: { onOpenTask: (task: Task) => void; refreshToken?: number; embedded?: boolean }) {
   const now = new Date(),
     currentYear = now.getFullYear(),
@@ -490,10 +525,22 @@ function DashboardSection({ title, description, children }: { title: string; des
   </Card>;
 }
 
-export function EnhancedDashboardView({ openFilter, openTask, refreshToken = 0 }: { openFilter: (title: string, query: Record<string, unknown>) => void; openTask: (task: Task) => void; refreshToken?: number }) {
+function DashboardMetricCard({ label, value, disabled = false, onClick }: { label: string; value: number | string; disabled?: boolean; onClick: () => void }) {
+  return <Card variant="outlined">
+    <CardActionArea onClick={onClick} disabled={disabled}>
+      <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
+        <Typography variant="body2" color="text.secondary">{label}</Typography>
+        <Typography variant="h5">{value}</Typography>
+      </CardContent>
+    </CardActionArea>
+  </Card>;
+}
+
+export function EnhancedDashboardView({ openFilter, openChecklistFilter, openTask, refreshToken = 0 }: { openFilter: (title: string, query: Record<string, unknown>) => void; openChecklistFilter: (title: string, scope: string) => void; openTask: (task: Task) => void; refreshToken?: number }) {
   const [data, setData] = useState<Dashboard | null>(null),
+    [checklists, setChecklists] = useState<ChecklistWorkspaceResponse | null>(null),
     [projects, setProjects] = useState<Project[]>([]),
-    [error, setError] = useState('');
+    [error, setError] = useState(''), [checklistError, setChecklistError] = useState('');
   useEffect(() => {
     Promise.all([api<Dashboard>('/dashboard'), api<Project[]>('/projects')])
       .then(([dashboard, projectRows]) => {
@@ -501,14 +548,19 @@ export function EnhancedDashboardView({ openFilter, openTask, refreshToken = 0 }
         setProjects(projectRows);
       })
       .catch((reason) => setError(reason.message));
+    setChecklistError('');
+    void api<ChecklistWorkspaceResponse>(`/tasks/checklists?${new URLSearchParams({ scope: 'open', today: localDateKey(), pageSize: '1' })}`).then(setChecklists).catch(reason => setChecklistError(reason.message));
   }, [refreshToken]);
   const cards = [
+    ['Open', 'active', {}],
     ['Overdue', 'overdue', { due: 'overdue' }],
     ['Due today', 'today', { due: 'today' }],
     ['Next 7 days', 'next7', { due: 'next7' }],
-    ['Critical', 'critical', { priority: 'critical' }],
-    ['Blocked', 'blocked', { blocked: 'true' }],
-    ['Waiting', 'waiting', { status: 'waiting' }]
+    ['Completed', 'completed', { view: 'completed' }],
+    ['Needs attention', 'needsAttention', { attention: 'true' }]
+  ] as const;
+  const checklistCards = [
+    ['Open', 'open'], ['Overdue', 'overdue'], ['Due today', 'today'], ['Next 7 days', 'next7'], ['Completed', 'completed'], ['Required', 'required']
   ] as const;
   if (error) return <Alert severity="error">{error}</Alert>;
   return (
@@ -521,21 +573,18 @@ export function EnhancedDashboardView({ openFilter, openTask, refreshToken = 0 }
         <LinearProgress />
       ) : (
         <>
-          <Box className="metric-grid">
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2,minmax(0,1fr))' }, gap: 2 }}>
+          <Box><Typography variant="overline" fontWeight={800}>Tasks</Typography>
+          <Box className="compact-metric-grid">
             {cards.map(([label, key, query]) => (
-              <Card key={key}>
-                <CardActionArea onClick={() => openFilter(label, query)}>
-                  <CardContent>
-                    <Stack direction="row" justifyContent="space-between">
-                      <Box>
-                        <Typography color="text.secondary">{label}</Typography>
-                        <Typography variant="h4">{data.counts[key] || 0}</Typography>
-                      </Box>
-                    </Stack>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
+              <DashboardMetricCard key={key} label={label} value={data.counts[key] || 0} onClick={() => openFilter(label, query)} />
             ))}
+          </Box></Box>
+          <Box><Typography variant="overline" fontWeight={800}>Checklist items</Typography>
+          {checklistError && <Alert severity="warning" sx={{ mb: 1 }}>Checklist metrics are temporarily unavailable. Deploy the current Tasks Worker and API Gateway together.</Alert>}
+          <Box className="compact-metric-grid">
+            {checklistCards.map(([label, key]) => <DashboardMetricCard key={key} label={label} value={checklists ? checklists.metrics[key] : '—'} disabled={!checklists} onClick={() => openChecklistFilter(label, key)} />)}
+          </Box></Box>
           </Box>
           <DashboardSection title="Overall workload" description="Average progress across active tasks">
             <CardActionArea onClick={() => openFilter('Overall workload', {})} sx={{ p: 1, borderRadius: 1 }}>
@@ -581,9 +630,6 @@ export function EnhancedDashboardView({ openFilter, openTask, refreshToken = 0 }
                   <Typography color="text.secondary">Create a project to see project progress.</Typography>
                 )}
               </Stack>
-          </DashboardSection>
-          <DashboardSection title="Checklist attention" description="Due-today and overdue checklist items, separate from task counts.">
-            <ChecklistAttentionPanel onOpen={openTask} refreshToken={refreshToken} compact embedded />
           </DashboardSection>
           <DashboardSection title="Deadline pressure" description="Daily and weekly pressure from task and checklist deadlines.">
             <DeadlinePressureCard onOpen={openTask} refreshToken={refreshToken} embedded />
