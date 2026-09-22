@@ -6,7 +6,7 @@ const portal = read('apps/connected-web/src/PublicPersonTasks.tsx');
 
 describe('v16.16.2 shared portal PWA notification onboarding', () => {
   it('requires installation before notification permission on iPhone and iPad', () => {
-    expect(portal).toContain("install.platform === 'ios' && !install.installed");
+    expect(portal).toContain('sharedInstallCapable && !install.installed');
     expect(portal).toContain('Install Task Tracker to enable notifications');
     expect(portal).toContain('install.requestInstall()');
     expect(portal).toContain('<PwaInstallInstructions/>');
@@ -15,14 +15,14 @@ describe('v16.16.2 shared portal PWA notification onboarding', () => {
   });
 
   it('requests permission after installation and explains denied permission', () => {
-    expect(portal).toContain("install.platform === 'ios' && install.installed && notificationPermission !== 'granted'");
+    expect(portal).toContain("install.installed && notificationPermission !== 'granted'");
     expect(portal).toContain('>Enable notifications</Button>');
     expect(portal).toContain("Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission()");
     expect(portal).toContain('Notifications are blocked in device settings');
   });
 
   it('shows the subscription switch only after installed iOS permission is granted', () => {
-    expect(portal).toContain("install.platform !== 'ios' || (install.installed && notificationPermission === 'granted')");
+    expect(portal).toContain("(!sharedInstallCapable && !install.installed) || (install.installed && notificationPermission === 'granted')");
     expect(portal).toContain('{showPushSwitch && <FormControlLabel');
     expect(portal).toContain('data.preferences.pushEnabled && data.preferences.activePushSubscriptions > 0');
     expect(portal).toContain("void savePreferences({ pushEnabled: false })");
@@ -31,8 +31,8 @@ describe('v16.16.2 shared portal PWA notification onboarding', () => {
   it('refreshes permission state after device settings or app switching', () => {
     expect(portal).toContain("document.addEventListener('visibilitychange', refreshPermission)");
     expect(portal).toContain("window.addEventListener('focus', refreshPermission)");
-    expect(read('apps/connected-web/public/service-worker.js')).toContain('task-tracker-connected-v16-16-2');
-    expect(read('packages/connected-contracts/release.ts')).toContain("'16.16.2'");
+    expect(read('apps/connected-web/public/service-worker.js')).toMatch(/task-tracker-connected-v16-16-\d+/);
+    expect(read('packages/connected-contracts/release.ts')).toMatch(/'16\.16\.\d+'/);
   });
 
   it('returns an installed Home Screen app to the originating shared link', () => {
