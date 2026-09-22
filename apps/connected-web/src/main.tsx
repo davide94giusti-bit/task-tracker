@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { PwaInstallProvider } from './PwaInstallPrompt';
 import './styles.css';
 
 if ('serviceWorker' in navigator) {
@@ -11,4 +12,4 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
+createRoot(document.getElementById('root')!).render(<React.StrictMode><PwaInstallProvider><App/></PwaInstallProvider></React.StrictMode>);

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Avatar, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
-import { Add, ArrowBack, AttachFile, Call, CheckCircle, Close, Delete, Edit, Email, Link as LinkIcon, NotificationsActive, OpenInNew, Person as PersonIcon, Refresh, TableRows, ViewModule, WhatsApp } from '@mui/icons-material';
+import { Alert, Avatar, Badge, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, Menu, MenuItem, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
+import { Add, ArrowBack, AttachFile, Call, CheckCircle, Close, Delete, Edit, Email, ExpandLess, ExpandMore, Link as LinkIcon, NotificationsActive, OpenInNew, Person as PersonIcon, Refresh, TableRows, ViewModule, WhatsApp } from '@mui/icons-material';
 import { api } from './api';
 import { AccessibleTextField as TextField } from './AccessibleTextField';
-import { ChecklistAttentionPanel, DeadlinePressureCard, TodayPressureWarning } from './DeadlineAttention';
+import { ChecklistAttentionPanel, DeadlinePressureCard } from './DeadlineAttention';
 import type { ChecklistItem, CostEntry, CostSummary, Dashboard, NotificationItem, Person, Project, Task, TaskAttachment, TaskDependency, View } from './types';
 
 function titleFor(view: View, override?: string) {
@@ -141,7 +141,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
           New task
         </Button>
       </Stack>
-      {view === 'today' && <><TodayPressureWarning onOpen={onOpen} refreshToken={refreshToken}/><ChecklistAttentionPanel onOpen={onOpen} refreshToken={refreshToken} /></>}
+      {view === 'today' && <ChecklistAttentionPanel onOpen={onOpen} refreshToken={refreshToken} />}
       {view === 'today' && <Typography variant="h5" mb={1}>Tasks due today</Typography>}
       <Paper variant="outlined" sx={{ p: 1.25, mb: 2 }}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) auto' }, gap: 1.5, alignItems: 'center' }}>
@@ -366,7 +366,7 @@ export function EnhancedTasksView({ view, query, title, onOpen, onNew, refreshTo
   );
 }
 
-function CostAnalyticsCard({ onOpenTask, refreshToken = 0 }: { onOpenTask: (task: Task) => void; refreshToken?: number }) {
+function CostAnalyticsCard({ onOpenTask, refreshToken = 0, embedded = false }: { onOpenTask: (task: Task) => void; refreshToken?: number; embedded?: boolean }) {
   const now = new Date(),
     currentYear = now.getFullYear(),
     currentSixMonthWindow = now.getMonth() < 6 ? 0 : 1,
@@ -421,10 +421,10 @@ function CostAnalyticsCard({ onOpenTask, refreshToken = 0 }: { onOpenTask: (task
   };
   return (
     <>
-      <Card sx={{ mt: 2 }}>
+      <Card elevation={embedded ? 0 : undefined} sx={{ mt: embedded ? 0 : 2, border: embedded ? 0 : undefined }}>
         <CardContent>
           <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} mb={2}>
-            <Box><Typography variant="h6">Total cost</Typography><Typography color="text.secondary">Past and future task costs, including checklist items.</Typography></Box>
+            {!embedded && <Box><Typography variant="h6">Total cost</Typography><Typography color="text.secondary">Past and future task costs, including checklist items.</Typography></Box>}
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
               <TextField select size="small" label="Period" value={year} onChange={(event) => { setYear(event.target.value); setMonth(''); }} sx={{ minWidth: 130 }}>
                 <MenuItem value="all">All time</MenuItem>
@@ -471,6 +471,23 @@ function CostAnalyticsCard({ onOpenTask, refreshToken = 0 }: { onOpenTask: (task
       </Dialog>
     </>
   );
+}
+
+function DashboardSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+  const [expanded, setExpanded] = useState(false);
+  return <Card sx={{ mt: 2 }}>
+    <CardActionArea onClick={() => setExpanded(value => !value)} aria-expanded={expanded} aria-controls={`dashboard-${title.toLowerCase().replaceAll(' ', '-')}`}>
+      <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" gap={2}>
+          <Box minWidth={0}><Typography variant="h6">{title}</Typography><Typography color="text.secondary" variant="body2">{description}</Typography></Box>
+          <IconButton component="span" aria-hidden="true" tabIndex={-1} sx={{ flexShrink: 0 }}>{expanded ? <ExpandLess/> : <ExpandMore/>}</IconButton>
+        </Stack>
+      </CardContent>
+    </CardActionArea>
+    <Collapse in={expanded} timeout="auto" unmountOnExit>
+      <Box id={`dashboard-${title.toLowerCase().replaceAll(' ', '-')}`} sx={{ px: { xs: 1.5, sm: 2 }, pb: 2 }}>{children}</Box>
+    </Collapse>
+  </Card>;
 }
 
 export function EnhancedDashboardView({ openFilter, openTask, refreshToken = 0 }: { openFilter: (title: string, query: Record<string, unknown>) => void; openTask: (task: Task) => void; refreshToken?: number }) {
@@ -520,26 +537,16 @@ export function EnhancedDashboardView({ openFilter, openTask, refreshToken = 0 }
               </Card>
             ))}
           </Box>
-          <Card sx={{ mt: 2 }}>
-            <CardActionArea onClick={() => openFilter('Overall workload', {})}>
-              <CardContent>
+          <DashboardSection title="Overall workload" description="Average progress across active tasks">
+            <CardActionArea onClick={() => openFilter('Overall workload', {})} sx={{ p: 1, borderRadius: 1 }}>
                 <Stack direction="row" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h6">Overall workload</Typography>
-                    <Typography color="text.secondary">Average progress across active tasks</Typography>
-                  </Box>
+                  <Typography color="text.secondary">Open active tasks</Typography>
                   <Typography variant="h5">{data.overallProgress}%</Typography>
                 </Stack>
                 <LinearProgress variant="determinate" value={data.overallProgress} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
-              </CardContent>
             </CardActionArea>
-          </Card>
-          <Card sx={{ mt: 2 }}>
-            <CardContent>
-              <Typography variant="h6">Progress by project</Typography>
-              <Typography color="text.secondary" mb={2}>
-                Select a project to open its tasks.
-              </Typography>
+          </DashboardSection>
+          <DashboardSection title="Progress by project" description="Select a project to open its tasks.">
               <Stack spacing={1.5}>
                 {projects.length ? (
                   projects.map((project) => (
@@ -574,11 +581,16 @@ export function EnhancedDashboardView({ openFilter, openTask, refreshToken = 0 }
                   <Typography color="text.secondary">Create a project to see project progress.</Typography>
                 )}
               </Stack>
-            </CardContent>
-          </Card>
-          <ChecklistAttentionPanel onOpen={openTask} refreshToken={refreshToken} compact />
-          <DeadlinePressureCard onOpen={openTask} refreshToken={refreshToken} />
-          <CostAnalyticsCard onOpenTask={openTask} refreshToken={refreshToken} />
+          </DashboardSection>
+          <DashboardSection title="Checklist attention" description="Due-today and overdue checklist items, separate from task counts.">
+            <ChecklistAttentionPanel onOpen={openTask} refreshToken={refreshToken} compact embedded />
+          </DashboardSection>
+          <DashboardSection title="Deadline pressure" description="Daily and weekly pressure from task and checklist deadlines.">
+            <DeadlinePressureCard onOpen={openTask} refreshToken={refreshToken} embedded />
+          </DashboardSection>
+          <DashboardSection title="Total cost" description="Past and future task costs, including checklist items.">
+            <CostAnalyticsCard onOpenTask={openTask} refreshToken={refreshToken} embedded />
+          </DashboardSection>
         </>
       )}
     </>

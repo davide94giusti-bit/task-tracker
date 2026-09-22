@@ -54,7 +54,7 @@ function DeadlineItemRow({ item, onOpen, onCompleted }: { item: DeadlineWorkItem
   </Card>;
 }
 
-export function ChecklistAttentionPanel({ onOpen, refreshToken = 0, compact = false }: { onOpen: (task: Task) => void; refreshToken?: number; compact?: boolean }) {
+export function ChecklistAttentionPanel({ onOpen, refreshToken = 0, compact = false, embedded = false }: { onOpen: (task: Task) => void; refreshToken?: number; compact?: boolean; embedded?: boolean }) {
   const [data, setData] = useState<ChecklistAttention | null>(null), [error, setError] = useState(''), [expanded, setExpanded] = useState<'due'|'overdue'|null>(null);
   const load = useCallback(async () => {
     setError('');
@@ -65,7 +65,10 @@ export function ChecklistAttentionPanel({ onOpen, refreshToken = 0, compact = fa
   if (error) return <Alert severity="error" action={<Button color="inherit" onClick={() => void load()}>Retry</Button>}>{error}</Alert>;
   if (!data) return <Stack direction="row" gap={1} alignItems="center"><CircularProgress size={20}/><Typography>Loading checklist deadlines…</Typography></Stack>;
   const items = [...data.overdue.map(item => ({ ...item, overdue: true })), ...data.dueToday.map(item => ({ ...item, overdue: false }))];
-  if (compact) return <><Card sx={{ mt: 2 }}><CardContent><Typography variant="h6">Checklist attention</Typography><Typography color="text.secondary">Checklist-item counts remain separate from task metrics.</Typography><Stack direction="row" gap={1} mt={1}><CardActionArea onClick={() => setExpanded('due')} sx={{ p: 1.25, border: 1, borderColor: 'divider', borderRadius: 1, minHeight: 82 }}><Typography color="text.secondary">Checklist due today</Typography><Typography variant="h4">{data.dueToday.length}</Typography></CardActionArea><CardActionArea onClick={() => setExpanded('overdue')} sx={{ p: 1.25, border: 1, borderColor: data.overdue.length ? 'error.main' : 'divider', borderRadius: 1, minHeight: 82 }}><Typography color="text.secondary">Checklist overdue</Typography><Typography variant="h4" color={data.overdue.length ? 'error.main' : 'text.primary'}>{data.overdue.length}</Typography></CardActionArea></Stack></CardContent></Card><Dialog open={!!expanded} onClose={() => setExpanded(null)} fullWidth maxWidth="md"><DialogTitle>{expanded === 'overdue' ? 'Overdue checklist items' : 'Checklist items due today'}</DialogTitle><DialogContent><Stack spacing={1} mt={1}>{(expanded === 'overdue' ? data.overdue : data.dueToday).map(item => <DeadlineItemRow key={item.id} item={{ ...item, overdue: expanded === 'overdue' }} onOpen={onOpen} onCompleted={load}/>)}{!(expanded === 'overdue' ? data.overdue : data.dueToday).length && <Typography color="text.secondary">No checklist items in this category.</Typography>}</Stack></DialogContent><DialogActions><Button onClick={() => setExpanded(null)}>Close</Button></DialogActions></Dialog></>;
+  if (compact) {
+    const metrics = <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} mt={embedded ? 0 : 1}><CardActionArea onClick={() => setExpanded('due')} sx={{ p: 1.25, border: 1, borderColor: 'divider', borderRadius: 1, minHeight: 82 }}><Typography color="text.secondary">Checklist due today</Typography><Typography variant="h4">{data.dueToday.length}</Typography></CardActionArea><CardActionArea onClick={() => setExpanded('overdue')} sx={{ p: 1.25, border: 1, borderColor: data.overdue.length ? 'error.main' : 'divider', borderRadius: 1, minHeight: 82 }}><Typography color="text.secondary">Checklist overdue</Typography><Typography variant="h4" color={data.overdue.length ? 'error.main' : 'text.primary'}>{data.overdue.length}</Typography></CardActionArea></Stack>;
+    return <>{embedded ? metrics : <Card sx={{ mt: 2 }}><CardContent><Typography variant="h6">Checklist attention</Typography><Typography color="text.secondary">Checklist-item counts remain separate from task metrics.</Typography>{metrics}</CardContent></Card>}<Dialog open={!!expanded} onClose={() => setExpanded(null)} fullWidth maxWidth="md"><DialogTitle>{expanded === 'overdue' ? 'Overdue checklist items' : 'Checklist items due today'}</DialogTitle><DialogContent><Stack spacing={1} mt={1}>{(expanded === 'overdue' ? data.overdue : data.dueToday).map(item => <DeadlineItemRow key={item.id} item={{ ...item, overdue: expanded === 'overdue' }} onOpen={onOpen} onCompleted={load}/>)}{!(expanded === 'overdue' ? data.overdue : data.dueToday).length && <Typography color="text.secondary">No checklist items in this category.</Typography>}</Stack></DialogContent><DialogActions><Button onClick={() => setExpanded(null)}>Close</Button></DialogActions></Dialog></>;
+  }
   return <Box mb={3}>
     <Typography variant="h5" mb={1}>Checklist attention</Typography>
     {!items.length ? <Alert severity="success">No overdue or due-today checklist items.</Alert> : <Stack spacing={2}>
@@ -75,7 +78,7 @@ export function ChecklistAttentionPanel({ onOpen, refreshToken = 0, compact = fa
   </Box>;
 }
 
-export function DeadlinePressureCard({ onOpen, refreshToken = 0, calendarStart, calendarDays, onData }: { onOpen: (task: Task) => void; refreshToken?: number; calendarStart?: string; calendarDays?: number; onData?: (data: DeadlinePressure) => void }) {
+export function DeadlinePressureCard({ onOpen, refreshToken = 0, calendarStart, calendarDays, onData, embedded = false }: { onOpen: (task: Task) => void; refreshToken?: number; calendarStart?: string; calendarDays?: number; onData?: (data: DeadlinePressure) => void; embedded?: boolean }) {
   const [data, setData] = useState<DeadlinePressure | null>(null), [mode, setMode] = useState<'daily'|'weekly'>('daily'), [selected, setSelected] = useState<PressurePeriod | null>(null), [error, setError] = useState('');
   const onDataRef = useRef(onData); onDataRef.current = onData;
   const start = calendarStart || localDateKey(), days = calendarDays || 28;
@@ -91,24 +94,25 @@ export function DeadlinePressureCard({ onOpen, refreshToken = 0, calendarStart, 
   useEffect(() => { const listener = (event: Event) => { const date = (event as CustomEvent<string>).detail; const period = data?.daily.find(day => day.date === date); if (period) setSelected(period); }; window.addEventListener('task-tracker:open-pressure', listener); return () => window.removeEventListener('task-tracker:open-pressure', listener); }, [data]);
   const periods = useMemo(() => mode === 'daily' ? data?.daily || [] : data?.weekly || [], [data, mode]);
   if (error) return <Alert severity="error" action={<Button color="inherit" startIcon={<Refresh/>} onClick={() => void load()}>Retry</Button>}>{error}</Alert>;
-  if (!data) return <Card sx={{ mt: 2 }}><CardContent><CircularProgress size={22}/> Loading deadline pressure…</CardContent></Card>;
+  if (!data) return embedded ? <Stack direction="row" gap={1} alignItems="center"><CircularProgress size={22}/><Typography>Loading deadline pressure…</Typography></Stack> : <Card sx={{ mt: 2 }}><CardContent><CircularProgress size={22}/> Loading deadline pressure…</CardContent></Card>;
+  const pressureContent = <>
+    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={1} alignItems={{ sm: 'center' }}>
+      {!embedded && <Box><Typography variant="h6">Deadline pressure</Typography><Typography color="text.secondary">Relative workload from task and checklist deadlines.</Typography></Box>}
+      <ToggleButtonGroup exclusive size="small" value={mode} onChange={(_, value) => value && setMode(value)} aria-label="Deadline pressure period"><ToggleButton value="daily">Daily</ToggleButton><ToggleButton value="weekly">Weekly</ToggleButton></ToggleButtonGroup>
+    </Stack>
+    <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 1, mt: 2, scrollSnapType: 'x proximity' }}>
+      {periods.map(period => { const key = period.date || period.startDate!; return <Tooltip key={key} title={`${levelLabel(period.level)}: ${period.taskCount} tasks, ${period.checklistCount} checklist items, score ${period.score}`}>
+        <CardActionArea onClick={() => setSelected(period)} aria-label={`${key}, ${levelLabel(period.level)}, ${period.taskCount} tasks and ${period.checklistCount} checklist items`} sx={{ minWidth: mode === 'daily' ? 112 : 160, minHeight: 110, p: 1.25, border: '2px solid', borderColor: levelColor[period.level], borderRadius: 1.5, scrollSnapAlign: 'start' }}>
+          <Typography fontWeight={800}>{mode === 'daily' ? formatDate(period.date) : `${formatDate(period.startDate)}–${formatDate(period.endDate)}`}</Typography>
+          <Typography variant="body2" sx={{ color: levelColor[period.level], textTransform: 'capitalize', fontWeight: 800 }}>{levelLabel(period.level)}</Typography>
+          <Typography variant="caption" display="block">{period.taskCount} tasks · {period.checklistCount} checklist</Typography>
+          {!!period.overdueCount && <Typography variant="caption" color="error.main" display="block">{period.overdueCount} overdue</Typography>}
+          {mode === 'weekly' && period.heaviestDate && <Typography variant="caption" display="block">Peak {formatDate(period.heaviestDate)}</Typography>}
+        </CardActionArea></Tooltip>; })}
+    </Box>
+  </>;
   return <>
-    <Card sx={{ mt: 2 }}><CardContent>
-      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={1} alignItems={{ sm: 'center' }}>
-        <Box><Typography variant="h6">Deadline pressure</Typography><Typography color="text.secondary">Relative workload from task and checklist deadlines.</Typography></Box>
-        <ToggleButtonGroup exclusive size="small" value={mode} onChange={(_, value) => value && setMode(value)} aria-label="Deadline pressure period"><ToggleButton value="daily">Daily</ToggleButton><ToggleButton value="weekly">Weekly</ToggleButton></ToggleButtonGroup>
-      </Stack>
-      <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 1, mt: 2, scrollSnapType: 'x proximity' }}>
-        {periods.map(period => { const key = period.date || period.startDate!; return <Tooltip key={key} title={`${levelLabel(period.level)}: ${period.taskCount} tasks, ${period.checklistCount} checklist items, score ${period.score}`}>
-          <CardActionArea onClick={() => setSelected(period)} aria-label={`${key}, ${levelLabel(period.level)}, ${period.taskCount} tasks and ${period.checklistCount} checklist items`} sx={{ minWidth: mode === 'daily' ? 112 : 160, minHeight: 110, p: 1.25, border: '2px solid', borderColor: levelColor[period.level], borderRadius: 1.5, scrollSnapAlign: 'start' }}>
-            <Typography fontWeight={800}>{mode === 'daily' ? formatDate(period.date) : `${formatDate(period.startDate)}–${formatDate(period.endDate)}`}</Typography>
-            <Typography variant="body2" sx={{ color: levelColor[period.level], textTransform: 'capitalize', fontWeight: 800 }}>{levelLabel(period.level)}</Typography>
-            <Typography variant="caption" display="block">{period.taskCount} tasks · {period.checklistCount} checklist</Typography>
-            {!!period.overdueCount && <Typography variant="caption" color="error.main" display="block">{period.overdueCount} overdue</Typography>}
-            {mode === 'weekly' && period.heaviestDate && <Typography variant="caption" display="block">Peak {formatDate(period.heaviestDate)}</Typography>}
-          </CardActionArea></Tooltip>; })}
-      </Box>
-    </CardContent></Card>
+    {embedded ? <Box>{pressureContent}</Box> : <Card sx={{ mt: 2 }}><CardContent>{pressureContent}</CardContent></Card>}
     <Dialog open={!!selected} onClose={() => setSelected(null)} fullWidth maxWidth="md">
       <DialogTitle>Deadline pressure · {selected?.date ? formatDate(selected.date) : `${formatDate(selected?.startDate)}–${formatDate(selected?.endDate)}`}</DialogTitle>
       <DialogContent><Stack spacing={1.25} mt={1}>
@@ -118,9 +122,4 @@ export function DeadlinePressureCard({ onOpen, refreshToken = 0, calendarStart, 
       </Stack></DialogContent><DialogActions><Button onClick={() => setSelected(null)}>Close</Button></DialogActions>
     </Dialog>
   </>;
-}
-
-export function TodayPressureWarning({ onOpen, refreshToken = 0 }: { onOpen: (task: Task) => void; refreshToken?: number }) {
-  const [period, setPeriod] = useState<PressurePeriod | null>(null);
-  return <Box mb={2}>{period && ['heavy','very_heavy'].includes(period.level) && <Alert severity={period.level === 'very_heavy' ? 'error' : 'warning'} action={<Button color="inherit" onClick={() => window.dispatchEvent(new CustomEvent('task-tracker:open-pressure', { detail: localDateKey() }))}>View details</Button>} sx={{ mb: 1 }}>{levelLabel(period.level)} deadline day: {period.taskCount} tasks, {period.checklistCount} checklist items, and {period.overdueCount} overdue items.</Alert>}<DeadlinePressureCard onOpen={onOpen} refreshToken={refreshToken} calendarStart={localDateKey()} calendarDays={28} onData={data => setPeriod(data.daily[0] || null)}/></Box>;
 }
