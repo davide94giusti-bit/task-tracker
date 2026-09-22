@@ -123,6 +123,15 @@ export const ChecklistToggle = z.object({
 export const ChecklistAttentionQuery = z.object({
   date: IsoDate,
 }).strict();
+export const ChecklistListQuery = z.object({
+  scope: z.enum(["all", "open", "overdue", "today", "next7", "required", "completed"]).default("open"),
+  search: z.string().trim().max(200).optional(),
+  projectId: Uuid.optional(),
+  responsiblePersonId: Uuid.optional(),
+  today: IsoDate.optional(),
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(1).max(200).default(100),
+}).strict();
 export const DeadlinePressureQuery = z.object({
   start: IsoDate,
   today: IsoDate.optional(),

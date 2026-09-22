@@ -25,6 +25,15 @@ body,
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
 }
+.compact-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.compact-metric-grid .MuiCardContent-root {
+  min-height: 74px;
+  padding: 12px;
+}
 .task-card-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -117,6 +126,9 @@ body,
   }
 }
 @media (max-width: 800px) {
+  .compact-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;

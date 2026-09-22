@@ -1,6 +1,7 @@
 import {
   CalendarQuery,
   ChecklistAttentionQuery,
+  ChecklistListQuery,
   ChecklistToggle,
   ChecklistWrite,
   CostQuery,
@@ -133,6 +134,34 @@ export default <WorkerHandler<Env>>{
           body: JSON.stringify({ name: "deadline_work_items", args: { p_start: query.date, p_end: query.date } }),
         }) as DeadlineWorkItem[];
         return json(buildChecklistAttention(items, query.date), 200, requestId);
+      }
+      if (url.pathname === "/checklists") {
+        const raw = Object.fromEntries(url.searchParams), query = ChecklistListQuery.parse({ ...raw, page: raw.page ? Number(raw.page) : undefined, pageSize: raw.pageSize ? Number(raw.pageSize) : undefined });
+        const [checklist, tasks, projects, people] = await Promise.all([
+          allRows(env, context, "checklist_items", { deleted_at: null }),
+          allRows(env, context, "tasks", { deleted_at: null }),
+          allRows(env, context, "projects", { deleted_at: null }),
+          allRows(env, context, "people", { deleted_at: null }),
+        ]);
+        const taskMap = new Map(tasks.map(task => [task.id, task])), projectMap = new Map(projects.map(project => [project.id, project.name])), peopleMap = new Map(people.map(person => [person.id, person.fullName]));
+        const today = query.today || new Date().toISOString().slice(0, 10), next7 = new Date(new Date(`${today}T12:00:00Z`).getTime() + 7 * 86_400_000).toISOString().slice(0, 10);
+        const eligible = checklist.flatMap(item => {
+          const task = taskMap.get(item.taskId); if (!task || task.deletedAt || ["cancelled", "archived"].includes(task.status)) return [];
+          return [{ ...item, taskTitle: task.title, taskDueDate: task.dueDate || null, taskStatus: task.status, taskPriority: task.priority, taskBlocked: !!task.blocked, taskVersion: task.version, projectId: task.projectId || null, projectName: projectMap.get(task.projectId) || "No project", responsiblePersonId: task.responsiblePersonId || null, responsiblePersonName: peopleMap.get(task.responsiblePersonId) || "Unassigned" }];
+        });
+        const active = (item: any) => !item.completed && !["completed", "cancelled", "archived"].includes(item.taskStatus);
+        const metrics = {
+          open: eligible.filter(active).length,
+          overdue: eligible.filter(item => active(item) && item.dueDate && item.dueDate < today).length,
+          today: eligible.filter(item => active(item) && item.dueDate === today).length,
+          next7: eligible.filter(item => active(item) && item.dueDate && item.dueDate > today && item.dueDate <= next7).length,
+          required: eligible.filter(item => active(item) && item.required).length,
+          completed: eligible.filter(item => item.completed).length,
+        };
+        const matchesScope = (item: any) => query.scope === "all" ? true : query.scope === "open" ? active(item) : query.scope === "completed" ? item.completed : query.scope === "required" ? active(item) && item.required : query.scope === "overdue" ? active(item) && item.dueDate && item.dueDate < today : query.scope === "today" ? active(item) && item.dueDate === today : active(item) && item.dueDate && item.dueDate > today && item.dueDate <= next7;
+        const filtered = eligible.filter((item: any) => matchesScope(item) && (!query.search || `${item.description} ${item.taskTitle} ${item.projectName}`.toLowerCase().includes(query.search.toLowerCase())) && (!query.projectId || item.projectId === query.projectId) && (!query.responsiblePersonId || item.responsiblePersonId === query.responsiblePersonId)).sort((a: any, b: any) => Number(a.completed) - Number(b.completed) || (a.dueDate || "9999-12-31").localeCompare(b.dueDate || "9999-12-31") || a.position - b.position || a.description.localeCompare(b.description));
+        const offset = (query.page - 1) * query.pageSize;
+        return json({ items: filtered.slice(offset, offset + query.pageSize), total: filtered.length, metrics, page: query.page, pageSize: query.pageSize }, 200, requestId);
       }
       if (url.pathname === "/deadline-pressure") {
         const raw = Object.fromEntries(url.searchParams);
