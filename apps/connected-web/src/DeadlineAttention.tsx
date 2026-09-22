@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Card, CardActionArea, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { Refresh } from '@mui/icons-material';
 import { api } from './api';
@@ -78,16 +78,15 @@ export function ChecklistAttentionPanel({ onOpen, refreshToken = 0, compact = fa
   </Box>;
 }
 
-export function DeadlinePressureCard({ onOpen, refreshToken = 0, calendarStart, calendarDays, onData, embedded = false }: { onOpen: (task: Task) => void; refreshToken?: number; calendarStart?: string; calendarDays?: number; onData?: (data: DeadlinePressure) => void; embedded?: boolean }) {
+export function DeadlinePressureCard({ onOpen, refreshToken = 0, embedded = false }: { onOpen: (task: Task) => void; refreshToken?: number; embedded?: boolean }) {
   const [data, setData] = useState<DeadlinePressure | null>(null), [mode, setMode] = useState<'daily'|'weekly'>('daily'), [selected, setSelected] = useState<PressurePeriod | null>(null), [error, setError] = useState('');
-  const onDataRef = useRef(onData); onDataRef.current = onData;
-  const start = calendarStart || localDateKey(), days = calendarDays || 28;
+  const start = localDateKey(), days = 28;
   const load = useCallback(async () => {
     setError('');
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
       const result = await api<DeadlinePressure>(`/tasks/deadline-pressure?${new URLSearchParams({ start, today: localDateKey(), days: String(days), weeks: '12', timezone, weekStartsOn: '1' })}`);
-      setData(result); onDataRef.current?.(result);
+      setData(result);
     } catch (reason) { setError(rolloutError(reason)); }
   }, [start, days, refreshToken]);
   useEffect(() => { void load(); const listener = () => void load(); window.addEventListener('task-tracker:deadline-change', listener); return () => window.removeEventListener('task-tracker:deadline-change', listener); }, [load]);
