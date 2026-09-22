@@ -28,7 +28,7 @@ describe('v16.16.3 cross-platform shared PWA installation', () => {
   });
 
   it('advances the connected release and application shell cache', () => {
-    expect(read('packages/connected-contracts/release.ts')).toContain("'16.18.2'");
-    expect(read('apps/connected-web/public/service-worker.js')).toContain('task-tracker-connected-v16-18-2');
+    expect(read('packages/connected-contracts/release.ts')).toContain("'16.18.3'");
+    expect(read('apps/connected-web/public/service-worker.js')).toContain('task-tracker-connected-v16-18-3');
   });
 });
