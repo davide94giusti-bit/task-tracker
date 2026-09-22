@@ -128,19 +128,19 @@ export default <WorkerHandler<Env>>{
             updated_by: context.userId,
             ...(!person.id ? { created_by: context.userId } : {}),
           };
-        return json(
-          await call(env.DATA, "/write", env, context, {
+        const saved = await call(env.DATA, "/write", env, context, {
             method: "POST",
             body: JSON.stringify({
               table: "people",
               method: person.id ? "patch" : "post",
               id: person.id,
+              expectedVersion: person.expectedVersion,
               row,
             }),
-          }),
-          200,
-          requestId,
-        );
+          }) as any[];
+        if (person.id && person.expectedVersion && !saved.length)
+          throw Object.assign(new Error("Contact changed on another device. Refresh before saving."), { status: 409 });
+        return json(saved, 200, requestId);
       }
       if (url.pathname === "/share-link") {
         const input = (await body(request)) as { personId?: string; action?: string; channel?: string };

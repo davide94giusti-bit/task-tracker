@@ -275,31 +275,59 @@ function PersonRecapDialog({ person, onClose }: { person: Person | null; onClose
     </DialogActions>
   </Dialog>;
 }
-function PeopleView({ onOpen }: { onOpen: (person: Person) => void }) { const mobile = useMediaQuery('(max-width:600px)'); const [items, setItems] = useState<Person[]>([]), [role, setRole] = useState(''), [open, setOpen] = useState(false), [recapPerson, setRecapPerson] = useState<Person | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [form, setForm] = useState({ fullName: '', email: '', company: '', role: '', phone: '', notes: '' }); const load = useCallback(() => { setError(''); return api<Person[]>('/people' + (role ? `?role=${encodeURIComponent(role)}` : '')).then(setItems).catch(e => setError(e.message)); }, [role]); useEffect(() => { void load(); }, [load]); const addToContacts = async (person: Person) => { setError(''); try { const details = await api<Person>(`/people/details?personId=${encodeURIComponent(person.id)}`); downloadContact({ ...person, ...details }); } catch (e) { setError((e as Error).message); } };
-return <>
-<PageTitle title="People" subtitle="Contacts and responsibilities. People do not receive login access." action={<Button variant="contained" startIcon={<Add />} onClick={() => setOpen(true)}>Add person</Button>}/>
-{error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-<TextField size="small" label="Filter by function" value={role} onChange={e => setRole(e.target.value)} sx={{ mb: 2 }}/>
-<Box className="card-grid">{items.map(p => <Card key={p.id}><CardActionArea onClick={() => onOpen(p)}>
-<CardContent>
-<Typography variant="h6">{p.fullName}</Typography>
-<Typography color="text.secondary">{p.role || 'No function'} • {p.activeTasks} active</Typography>
-<LinearProgress variant="determinate" value={p.progress} sx={{ mt: 2, height: 8, borderRadius: 4 }}/>
-<Typography variant="caption">{p.progress}% of task load complete</Typography>
-</CardContent>
-</CardActionArea><Divider/><CardActions sx={{ flexWrap: 'wrap', gap: 0.5 }}><Button size="small" onClick={event => { event.currentTarget.blur(); setRecapPerson(p); }}>Recap</Button><Button size="small" onClick={() => void addToContacts(p)}>Add to contacts</Button></CardActions></Card>)}</Box>
-<PersonRecapDialog person={recapPerson} onClose={() => setRecapPerson(null)}/>
-<Dialog open={open} onClose={() => !busy && setOpen(false)} fullWidth maxWidth="sm" fullScreen={mobile}>
-  <DialogTitle sx={{ pb: 1 }}><Stack direction="row" spacing={1.5} alignItems="center"><Avatar sx={{ bgcolor: 'primary.main' }}><People/></Avatar><Box><Typography variant="h6">Add a person</Typography><Typography variant="body2" color="text.secondary">Create a contact for responsibilities, tasks, and project work.</Typography></Box></Stack></DialogTitle>
-  <DialogContent dividers><Stack spacing={2.5}>
-    <Alert severity="info">People are contacts in your private directory. Adding someone here does not create a Task Tracker account, send an invitation, or grant login access.</Alert>
-    <Box><Typography fontWeight={800} mb={1.5}>Basic information</Typography><Stack spacing={1.5}><TextField autoFocus required label="Full name" value={form.fullName} onChange={e => setForm(v => ({ ...v, fullName: e.target.value }))}/><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}><TextField fullWidth label="Role or function" placeholder="For example: Electrician" value={form.role} onChange={e => setForm(v => ({ ...v, role: e.target.value }))}/><TextField fullWidth label="Company" value={form.company} onChange={e => setForm(v => ({ ...v, company: e.target.value }))}/></Stack></Stack></Box>
-    <Box><Typography fontWeight={800} mb={1.5}>Contact details</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}><TextField fullWidth label="Email (optional)" type="email" value={form.email} onChange={e => setForm(v => ({ ...v, email: e.target.value }))}/><TextField fullWidth label="Phone (optional)" value={form.phone} onChange={e => setForm(v => ({ ...v, phone: e.target.value }))}/></Stack></Box>
-    <TextField multiline minRows={4} label="Private notes" helperText="Notes remain private unless you explicitly share them through project collaboration." value={form.notes} onChange={e => setForm(v => ({ ...v, notes: e.target.value }))}/>
-  </Stack></DialogContent>
-  <DialogActions sx={{ p: 2, gap: 1, flexDirection: { xs: 'column-reverse', sm: 'row' }, '& > .MuiButton-root': { m: '0 !important', width: { xs: '100%', sm: 'auto' } } }}><Button disabled={busy} onClick={() => setOpen(false)}>Cancel</Button><Button variant="contained" disabled={busy || !form.fullName.trim()} onClick={async () => { setBusy(true); setError(''); try { await api('/people/save', { method: 'POST', body: { ...form, fullName: form.fullName.trim() } }); setForm({ fullName: '', email: '', company: '', role: '', phone: '', notes: '' }); setOpen(false); await load(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>{busy ? <CircularProgress size={20}/> : 'Add person'}</Button></DialogActions>
-</Dialog>
-</>; }
+const emptyPersonForm = { fullName: '', email: '', company: '', role: '', phone: '', address: '', website: '', preferredContact: '', notes: '' };
+function PeopleView({ onOpen }: { onOpen: (person: Person) => void }) {
+  const mobile = useMediaQuery('(max-width:600px)');
+  const [items, setItems] = useState<Person[]>([]), [role, setRole] = useState(''), [open, setOpen] = useState(false), [editing, setEditing] = useState<Person | null>(null), [editLoadingId, setEditLoadingId] = useState<string | null>(null), [recapPerson, setRecapPerson] = useState<Person | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [dialogError, setDialogError] = useState(''), [form, setForm] = useState({ ...emptyPersonForm });
+  const load = useCallback(() => { setError(''); return api<Person[]>('/people' + (role ? `?role=${encodeURIComponent(role)}` : '')).then(setItems).catch(e => setError(e.message)); }, [role]);
+  useEffect(() => { void load(); }, [load]);
+  const addToContacts = async (person: Person) => { setError(''); try { const details = await api<Person>(`/people/details?personId=${encodeURIComponent(person.id)}`); downloadContact({ ...person, ...details }); } catch (e) { setError((e as Error).message); } };
+  const startAdd = () => { setEditing(null); setForm({ ...emptyPersonForm }); setDialogError(''); setOpen(true); };
+  const startEdit = async (person: Person) => {
+    setError(''); setEditLoadingId(person.id);
+    try {
+      const details = await api<Person>(`/people/details?personId=${encodeURIComponent(person.id)}`), contact = { ...person, ...details };
+      setEditing(contact);
+      setForm({ fullName: contact.fullName || '', email: contact.email || '', company: contact.company || '', role: contact.role || '', phone: contact.phone || '', address: contact.address || '', website: contact.website || '', preferredContact: contact.preferredContact || '', notes: contact.notes || '' });
+      setDialogError(''); setOpen(true);
+    } catch (e) { setError((e as Error).message); }
+    finally { setEditLoadingId(null); }
+  };
+  const closeEditor = () => { if (!busy) { setOpen(false); setEditing(null); setDialogError(''); } };
+  return <>
+  <PageTitle title="People" subtitle="Contacts and responsibilities. People do not receive login access." action={<Button variant="contained" startIcon={<Add />} onClick={startAdd}>Add person</Button>}/>
+  {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+  <TextField size="small" label="Filter by function" value={role} onChange={e => setRole(e.target.value)} sx={{ mb: 2 }}/>
+  <Box className="card-grid">{items.map(p => <Card key={p.id}><CardActionArea onClick={() => onOpen(p)}>
+  <CardContent>
+  <Typography variant="h6">{p.fullName}</Typography>
+  <Typography color="text.secondary">{p.role || 'No function'} • {p.activeTasks} active</Typography>
+  <LinearProgress variant="determinate" value={p.progress} sx={{ mt: 2, height: 8, borderRadius: 4 }}/>
+  <Typography variant="caption">{p.progress}% of task load complete</Typography>
+  </CardContent>
+  </CardActionArea><Divider/><CardActions sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+    <Button size="small" startIcon={editLoadingId === p.id ? <CircularProgress size={16}/> : <Edit/>} disabled={editLoadingId !== null} onClick={() => void startEdit(p)}>Edit</Button>
+    <Button size="small" onClick={event => { event.currentTarget.blur(); setRecapPerson(p); }}>Recap</Button>
+    <Button size="small" onClick={() => void addToContacts(p)}>Add to contacts</Button>
+  </CardActions></Card>)}</Box>
+  <PersonRecapDialog person={recapPerson} onClose={() => setRecapPerson(null)}/>
+  <Dialog open={open} onClose={closeEditor} fullWidth maxWidth="sm" fullScreen={mobile}>
+    <DialogTitle sx={{ pb: 1 }}><Stack direction="row" spacing={1.5} alignItems="center"><Avatar sx={{ bgcolor: 'primary.main' }}>{editing ? <Edit/> : <People/>}</Avatar><Box><Typography variant="h6">{editing ? 'Edit contact' : 'Add a person'}</Typography><Typography variant="body2" color="text.secondary">{editing ? 'Update contact information without changing assigned work.' : 'Create a contact for responsibilities, tasks, and project work.'}</Typography></Box></Stack></DialogTitle>
+    <DialogContent dividers><Stack spacing={2.5}>
+      {dialogError && <Alert severity="error" role="alert">{dialogError}</Alert>}
+      <Alert severity="info">People are contacts in your private directory. {editing ? 'Updating this contact does not change their task assignments or project links.' : 'Adding someone here does not create a Task Tracker account, send an invitation, or grant login access.'}</Alert>
+      <Box><Typography fontWeight={800} mb={1.5}>Basic information</Typography><Stack spacing={1.5}><TextField autoFocus required label="Full name" value={form.fullName} onChange={e => setForm(v => ({ ...v, fullName: e.target.value }))}/><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}><TextField fullWidth label="Role or function" placeholder="For example: Electrician" value={form.role} onChange={e => setForm(v => ({ ...v, role: e.target.value }))}/><TextField fullWidth label="Company" value={form.company} onChange={e => setForm(v => ({ ...v, company: e.target.value }))}/></Stack></Stack></Box>
+      <Box><Typography fontWeight={800} mb={1.5}>Contact details</Typography><Stack spacing={1.5}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}><TextField fullWidth label="Email (optional)" type="email" value={form.email} onChange={e => setForm(v => ({ ...v, email: e.target.value }))}/><TextField fullWidth label="Phone (optional)" value={form.phone} onChange={e => setForm(v => ({ ...v, phone: e.target.value }))}/></Stack>
+        <TextField fullWidth label="Address (optional)" value={form.address} onChange={e => setForm(v => ({ ...v, address: e.target.value }))}/>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}><TextField fullWidth label="Website (optional)" type="url" placeholder="https://example.com" value={form.website} onChange={e => setForm(v => ({ ...v, website: e.target.value }))}/><TextField fullWidth label="Preferred contact method" placeholder="For example: Phone" value={form.preferredContact} onChange={e => setForm(v => ({ ...v, preferredContact: e.target.value }))}/></Stack>
+      </Stack></Box>
+      <TextField multiline minRows={4} label="Private notes" helperText="Notes remain private unless you explicitly share them through project collaboration." value={form.notes} onChange={e => setForm(v => ({ ...v, notes: e.target.value }))}/>
+    </Stack></DialogContent>
+    <DialogActions sx={{ p: 2, gap: 1, flexDirection: { xs: 'column-reverse', sm: 'row' }, '& > .MuiButton-root': { m: '0 !important', width: { xs: '100%', sm: 'auto' } } }}><Button disabled={busy} onClick={closeEditor}>Cancel</Button><Button variant="contained" disabled={busy || !form.fullName.trim()} onClick={async () => { setBusy(true); setDialogError(''); try { await api('/people/save', { method: 'POST', body: { ...form, ...(editing ? { id: editing.id, expectedVersion: editing.version, tags: editing.tags || [] } : {}), fullName: form.fullName.trim(), email: form.email.trim().toLowerCase(), website: form.website.trim() } }); setForm({ ...emptyPersonForm }); setEditing(null); setOpen(false); await load(); } catch (e) { setDialogError((e as Error).message); } finally { setBusy(false); } }}>{busy ? <CircularProgress size={20}/> : editing ? 'Save changes' : 'Add person'}</Button></DialogActions>
+  </Dialog>
+  </>;
+}
 function CalendarView({ onOpen, onNew, refreshToken }: {
     onOpen: (t: Task) => void;
     onNew: (date: string) => void;
