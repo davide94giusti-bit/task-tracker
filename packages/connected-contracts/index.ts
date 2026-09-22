@@ -158,6 +158,29 @@ export const ImportRequest = z.object({
   dryRun: z.boolean().default(true),
   snapshot: z.record(z.string(), z.unknown()),
 });
+export const ConnectedRestoreMode = z.enum(["empty", "replace"]);
+export const ConnectedBackupEnvelope = z.object({
+  format: z.literal("task-tracker-connected"),
+  version: z.number().int().min(2).max(3),
+  createdAt: z.string().datetime(),
+  workspaceId: Uuid.optional(),
+  manifest: z.object({
+    schemaVersion: z.number().int().positive().optional(),
+    release: z.string().max(50).optional(),
+    checksumAlgorithm: z.literal("SHA-256"),
+    dataChecksum: z.string().regex(/^[a-f0-9]{64}$/),
+    counts: z.record(z.string(), z.number().int().nonnegative()).optional(),
+    excluded: z.array(z.string().max(100)).max(30).optional(),
+  }).strict().optional(),
+  data: z.record(z.string(), z.unknown()),
+}).strict();
+export const ConnectedRestoreRequest = z.object({
+  restoreId: Uuid,
+  mode: ConnectedRestoreMode,
+  checksum: z.string().regex(/^[a-f0-9]{64}$/),
+  confirmation: z.string().max(100).optional(),
+  backup: ConnectedBackupEnvelope,
+}).strict();
 export const PushSubscriptionWrite = z.object({
   endpoint: z
     .string()

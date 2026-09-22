@@ -1,1 +1,1 @@
-export const CONNECTED_RELEASE = '16.16.3' as const;
+export const CONNECTED_RELEASE = '16.17.1' as const;

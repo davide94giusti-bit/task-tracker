@@ -7,12 +7,12 @@ import { AccountSecurity, PasswordSetup, UsersAccessView } from './AccessViews';
 import { AccessibleTextField as TextField } from './AccessibleTextField';
 import { BackupImportView, DiagnosticsView } from './BackupDiagnosticsViews';
 import { EnhancedDashboardView, EnhancedTasksView, NotificationBell, TaskDetailsDialog, TaskEditorDialog } from './ConnectedEnhancements';
-import { DeadlinePressureCard, localDateKey } from './DeadlineAttention';
+import { localDateKey } from './DeadlineAttention';
 import { DependencyLoadView } from './OperationalViews';
 import { PublicPersonTasks } from './PublicPersonTasks';
 import { PwaInstallBanner, PwaInstallCard, PwaInstallInstructions, usePwaInstall } from './PwaInstallPrompt';
 import { UserManualView } from './UserManualView';
-import type { Dashboard, DeadlinePressure, Person, Project, Task, View } from './types';
+import type { Dashboard, Person, Project, Task, View } from './types';
 // React 19 no longer exports JSX globally; this local bridge types stored icon elements.
 // eslint-disable-next-line @typescript-eslint/no-namespace
 declare namespace JSX {
@@ -309,7 +309,7 @@ function CalendarView({ onOpen, onNew, refreshToken }: {
     severity: string;
     count: number;
     tasks: Task[];
-}>>([]), [pressure, setPressure] = useState<DeadlinePressure | null>(null); useEffect(() => { const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1), end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0); api<typeof days>(`/calendar?start=${localDateKey(start)}&end=${localDateKey(end)}`).then(setDays); }, [cursor, refreshToken]);
+}>>([]); useEffect(() => { const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1), end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0); api<typeof days>(`/calendar?start=${localDateKey(start)}&end=${localDateKey(end)}`).then(setDays); }, [cursor, refreshToken]);
 const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 const cells = useMemo(() => { const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1), offset = (first.getDay() + 6) % 7, count = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate(); return [...Array(offset).fill(null), ...Array.from({ length: count }, (_, i) => { const date = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`; return days.find(d => d.date === date) || { date, severity: 'neutral', count: 0, tasks: [] }; })]; }, [cursor, days]);
 const day = days.find(d => d.date === selected);
@@ -328,13 +328,11 @@ return <>
 <Box className="calendar-grid">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(x => <Typography key={x} fontWeight={700} textAlign="center">{x}</Typography>)}{cells.map((d, i) => d ? <Card key={d.date} className={`calendar-day ${d.severity}${d.date === todayKey ? ' today' : ''}`}>
 <CardActionArea onClick={() => setSelected(d.date)}>
 <CardContent>
-<Stack direction="row" justifyContent="space-between"><Typography fontWeight={700}>{Number(d.date.slice(-2))}</Typography>{pressure?.daily.find(period => period.date === d.date && period.level !== 'no_deadlines') && <Box component="span" aria-label={`${pressure.daily.find(period => period.date === d.date)?.level.replace('_',' ')} deadline pressure`} sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: pressure.daily.find(period => period.date === d.date)?.level === 'very_heavy' ? '#dc2626' : pressure.daily.find(period => period.date === d.date)?.level === 'heavy' ? '#ea580c' : pressure.daily.find(period => period.date === d.date)?.level === 'moderate' ? '#ca8a04' : '#2563eb' }}/>}</Stack>
+<Typography fontWeight={700}>{Number(d.date.slice(-2))}</Typography>
 {d.count > 0 && <Box className="calendar-count" aria-label={`${d.count} tasks`}>{d.count}</Box>}
 </CardContent>
 </CardActionArea>
 </Card> : <Box key={`blank${i}`}/>)}</Box>
-<Typography variant="caption" color="text.secondary" display="block" mt={1}>Pressure dot: blue Light, yellow Moderate, orange Heavy, red Very heavy. Calendar counts remain unique parent-task cards.</Typography>
-<DeadlinePressureCard onOpen={onOpen} refreshToken={refreshToken} calendarStart={localDateKey(new Date(cursor.getFullYear(),cursor.getMonth(),1))} calendarDays={new Date(cursor.getFullYear(),cursor.getMonth()+1,0).getDate()} onData={setPressure}/>
 <Dialog open={!!selected} onClose={() => setSelected(null)} fullWidth>
 <DialogTitle>{selected && new Date(`${selected}T12:00`).toLocaleDateString(undefined, { dateStyle: 'full' })}</DialogTitle>
 <DialogContent>

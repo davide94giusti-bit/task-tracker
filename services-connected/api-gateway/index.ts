@@ -82,6 +82,9 @@ const routes: Array<[string, RegExp, keyof Env, string]> = [
   ["POST", /^\/v1\/backup\/export$/, "BACKUP", "/export"],
   ["POST", /^\/v1\/backup\/import-preview$/, "BACKUP", "/import-preview"],
   ["POST", /^\/v1\/backup\/import-apply$/, "BACKUP", "/import-apply"],
+  ["GET", /^\/v1\/backup\/status$/, "BACKUP", "/status"],
+  ["POST", /^\/v1\/backup\/restore-preview$/, "BACKUP", "/restore-preview"],
+  ["POST", /^\/v1\/backup\/restore-apply$/, "BACKUP", "/restore-apply"],
   ["GET", /^\/v1\/diagnostics$/, "DIAGNOSTICS", "/list"],
 ];
 const accessRoutes: Array<[string, RegExp, string]> = [
@@ -287,8 +290,10 @@ export default <WorkerHandler<Env>>{
           headers || {},
         );
       const binding = env[route[2]] as unknown as Fetcher,
-        limit = url.pathname.startsWith("/v1/backup/import-") || url.pathname === "/v1/tasks/attachments/upload"
-          ? 8_500_000
+        limit = url.pathname.startsWith("/v1/backup/restore-")
+          ? 20_000_000
+          : url.pathname.startsWith("/v1/backup/import-") || url.pathname === "/v1/tasks/attachments/upload"
+            ? 8_500_000
           : 1_000_000,
         payload =
           request.method === "GET" ? undefined : await body(request, limit);
