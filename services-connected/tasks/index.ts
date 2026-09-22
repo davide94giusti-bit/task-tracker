@@ -150,7 +150,8 @@ export default <WorkerHandler<Env>>{
           const task = taskMap.get(item.taskId); if (!task || task.deletedAt || ["cancelled", "archived"].includes(task.status)) return [];
           return [{ ...item, taskTitle: task.title, taskDueDate: task.dueDate || null, taskStatus: task.status, taskPriority: task.priority, taskBlocked: !!task.blocked, taskVersion: task.version, projectId: task.projectId || null, projectName: projectMap.get(task.projectId) || "No project", responsiblePersonId: task.responsiblePersonId || null, responsiblePersonName: peopleMap.get(task.responsiblePersonId) || "Unassigned" }];
         });
-        const active = (item: any) => !item.completed && !["completed", "cancelled", "archived"].includes(item.taskStatus);
+        const activeParent = (item: any) => !["completed", "cancelled", "archived"].includes(item.taskStatus);
+        const active = (item: any) => !item.completed && activeParent(item);
         const metrics = {
           open: eligible.filter(active).length,
           overdue: eligible.filter(item => active(item) && item.dueDate && item.dueDate < today).length,
@@ -158,6 +159,8 @@ export default <WorkerHandler<Env>>{
           next7: eligible.filter(item => active(item) && item.dueDate && item.dueDate > today && item.dueDate <= next7).length,
           required: eligible.filter(item => active(item) && item.required).length,
           completed: eligible.filter(item => item.completed).length,
+          activeCompleted: eligible.filter(item => activeParent(item) && item.completed).length,
+          activeTotal: eligible.filter(activeParent).length,
         };
         const matchesScope = (item: any) => query.scope === "all" ? true : query.scope === "open" ? active(item) : query.scope === "completed" ? item.completed : query.scope === "required" ? active(item) && item.required : query.scope === "overdue" ? active(item) && item.dueDate && item.dueDate < today : query.scope === "today" ? active(item) && item.dueDate === today : active(item) && item.dueDate && item.dueDate > today && item.dueDate <= next7;
         const filtered = eligible.filter((item: any) => matchesScope(item) && (!query.search || `${item.description} ${item.taskTitle} ${item.projectName}`.toLowerCase().includes(query.search.toLowerCase())) && (!query.projectId || item.projectId === query.projectId) && (!query.responsiblePersonId || item.responsiblePersonId === query.responsiblePersonId)).sort((a: any, b: any) => Number(a.completed) - Number(b.completed) || (a.dueDate || "9999-12-31").localeCompare(b.dueDate || "9999-12-31") || a.position - b.position || a.description.localeCompare(b.description));

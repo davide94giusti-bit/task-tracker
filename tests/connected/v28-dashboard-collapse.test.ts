@@ -17,7 +17,7 @@ describe('v16.16.1 focused Today and collapsible Dashboard', () => {
     expect(enhancements).toContain('function DashboardSection');
     expect(enhancements).toContain('const [expanded, setExpanded] = useState(false)');
     expect(enhancements).toContain('<Collapse in={expanded} timeout="auto" unmountOnExit>');
-    for (const title of ['Overall workload', 'Progress by project', 'Deadline pressure', 'Total cost']) {
+    for (const title of ['Overall progress', 'Progress by project', 'Deadline pressure', 'Total cost']) {
       expect(enhancements).toContain(`<DashboardSection title="${title}"`);
     }
   });

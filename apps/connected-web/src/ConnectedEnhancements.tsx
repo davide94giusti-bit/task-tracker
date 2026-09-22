@@ -562,6 +562,9 @@ export function EnhancedDashboardView({ openFilter, openChecklistFilter, openTas
   const checklistCards = [
     ['Open', 'open'], ['Overdue', 'overdue'], ['Due today', 'today'], ['Next 7 days', 'next7'], ['Completed', 'completed'], ['Required', 'required']
   ] as const;
+  const activeChecklistCompleted = checklists ? checklists.metrics.activeCompleted ?? checklists.metrics.completed : 0;
+  const activeChecklistTotal = checklists ? checklists.metrics.activeTotal ?? activeChecklistCompleted + checklists.metrics.open : 0;
+  const checklistProgress = activeChecklistTotal ? Math.round(activeChecklistCompleted / activeChecklistTotal * 100) : 0;
   if (error) return <Alert severity="error">{error}</Alert>;
   return (
     <>
@@ -586,14 +589,26 @@ export function EnhancedDashboardView({ openFilter, openChecklistFilter, openTas
             {checklistCards.map(([label, key]) => <DashboardMetricCard key={key} label={label} value={checklists ? checklists.metrics[key] : '—'} disabled={!checklists} onClick={() => openChecklistFilter(label, key)} />)}
           </Box></Box>
           </Box>
-          <DashboardSection title="Overall workload" description="Average progress across active tasks">
-            <CardActionArea onClick={() => openFilter('Overall workload', {})} sx={{ p: 1, borderRadius: 1 }}>
-                <Stack direction="row" justifyContent="space-between">
-                  <Typography color="text.secondary">Open active tasks</Typography>
-                  <Typography variant="h5">{data.overallProgress}%</Typography>
-                </Stack>
-                <LinearProgress variant="determinate" value={data.overallProgress} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
-            </CardActionArea>
+          <DashboardSection title="Overall progress" description="Progress across active tasks and their checklist items.">
+            <Stack spacing={1.5}>
+              <CardActionArea onClick={() => openFilter('Open tasks', {})} sx={{ p: 1, borderRadius: 1 }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="baseline" gap={1}>
+                    <Typography color="text.secondary">Active task progress</Typography>
+                    <Typography variant="h5">{data.overallProgress}%</Typography>
+                  </Stack>
+                  <LinearProgress variant="determinate" value={data.overallProgress} sx={{ mt: 1.5, height: 10, borderRadius: 5 }} />
+              </CardActionArea>
+              <CardActionArea onClick={() => openChecklistFilter('All', 'all')} disabled={!checklists} sx={{ p: 1, borderRadius: 1 }}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'baseline' }} gap={.5}>
+                    <Typography color="text.secondary">Checklist completion</Typography>
+                    <Typography variant="h5">{checklists ? `${activeChecklistCompleted} of ${activeChecklistTotal} · ${checklistProgress}%` : '—'}</Typography>
+                  </Stack>
+                  <LinearProgress variant="determinate" value={checklistProgress} sx={{ mt: 1.5, height: 10, borderRadius: 5 }} />
+              </CardActionArea>
+              <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>
+                Remaining work: {data.counts.active || 0} active tasks · {checklists ? checklists.metrics.open : '—'} open checklist items
+              </Typography>
+            </Stack>
           </DashboardSection>
           <DashboardSection title="Progress by project" description="Select a project to open its tasks.">
               <Stack spacing={1.5}>
