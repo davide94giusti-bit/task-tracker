@@ -1,7 +1,10 @@
 import {
   CalendarQuery,
+  ChecklistAttentionQuery,
+  ChecklistToggle,
   ChecklistWrite,
   CostQuery,
+  DeadlinePressureQuery,
   ProjectWrite,
   ProjectDelete,
   RecordId,
@@ -12,6 +15,7 @@ import {
   Uuid,
 } from "../../packages/connected-contracts";
 import { buildCostSummary } from "./costs";
+import { buildChecklistAttention, buildDeadlinePressure, PRESSURE_WEIGHTS, type DeadlineWorkItem } from "./deadlines";
 import {
   authContext,
   body,
@@ -121,6 +125,45 @@ export default <WorkerHandler<Env>>{
           200,
           requestId,
         );
+      }
+      if (url.pathname === "/checklist-attention") {
+        const query = ChecklistAttentionQuery.parse(Object.fromEntries(url.searchParams));
+        const items = await call(env.DATA, "/rpc", env, context, {
+          method: "POST",
+          body: JSON.stringify({ name: "deadline_work_items", args: { p_start: query.date, p_end: query.date } }),
+        }) as DeadlineWorkItem[];
+        return json(buildChecklistAttention(items, query.date), 200, requestId);
+      }
+      if (url.pathname === "/deadline-pressure") {
+        const raw = Object.fromEntries(url.searchParams);
+        const query = DeadlinePressureQuery.parse({
+          ...raw,
+          days: raw.days ? Number(raw.days) : undefined,
+          weeks: raw.weeks ? Number(raw.weeks) : undefined,
+          weekStartsOn: raw.weekStartsOn ? Number(raw.weekStartsOn) : undefined,
+        });
+        const today = query.today || query.start;
+        const start = new Date(`${query.start}T00:00:00Z`);
+        const horizonDays = Math.max(query.days, query.weeks * 7 + 7);
+        const end = new Date(start.getTime() + (horizonDays - 1) * 86_400_000).toISOString().slice(0, 10);
+        const items = await call(env.DATA, "/rpc", env, context, {
+          method: "POST",
+          body: JSON.stringify({ name: "deadline_work_items", args: { p_start: query.start, p_end: end } }),
+        }) as DeadlineWorkItem[];
+        const pressure = buildDeadlinePressure({ items, startDate: query.start, today, days: query.days, weeks: query.weeks, weekStartsOn: query.weekStartsOn });
+        return json({ generatedAt: new Date().toISOString(), timezone: query.timezone, startDate: query.start, scoring: PRESSURE_WEIGHTS, ...pressure }, 200, requestId);
+      }
+      if (url.pathname === "/checklist-toggle") {
+        const input = ChecklistToggle.parse(await body(request));
+        try {
+          return json(await call(env.DATA, "/rpc", env, context, {
+            method: "POST",
+            body: JSON.stringify({ name: "toggle_checklist_item", args: { p_item_id: input.itemId, p_completed: input.completed, p_expected_version: input.expectedVersion } }),
+          }), 200, requestId);
+        } catch (error) {
+          if ((error as Error).message.includes("changed on another device")) Object.assign(error as Error, { status: 409, code: "VERSION_CONFLICT" });
+          throw error;
+        }
       }
       if (url.pathname === "/details") {
         const taskId = Uuid.parse(url.searchParams.get("taskId"));
