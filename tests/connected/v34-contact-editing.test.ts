@@ -35,6 +35,6 @@ describe('v16.18.4 contact editing', () => {
     const manual = read('apps/connected-web/src/UserManualView.tsx');
     expect(manual).toContain('use Edit on the person card to update');
     expect(manual).toContain('does not change task assignments or project links');
-    expect(read('packages/connected-contracts/release.ts')).toContain("'16.19.0'");
+    expect(read('packages/connected-contracts/release.ts')).toContain("'16.19.1'");
   });
 });

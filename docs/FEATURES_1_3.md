@@ -36,7 +36,7 @@ Dependency depth is capped at three per affected task. Visited-node and path che
 
 ## Calendar
 
-The calendar requests only the visible month plus its leading/trailing week. A task appears for its due date, reminder date, or completion date. Project/task start dates are intentionally excluded. If several fields put one task on the same day, it appears once with multiple reason badges.
+The calendar requests only the visible month plus its leading/trailing week. A task appears for its due date, an incomplete checklist-item due date, or its completion date. Reminder and notification dates are delivery-only and never create calendar entries or counts. Project/task start dates are intentionally excluded. If several eligible work dates put one task on the same day, it appears once.
 
 Primary day severity is red for overdue or critical, orange for high priority, blue for ordinary scheduled work, green for completed-only work, and neutral for an empty day. Counts and text labels accompany color. Selecting a day opens its tasks; **Add task** pre-fills that day as the due date. Selecting a task deep-links to its exact editor and preserves the calendar date in the route.
 

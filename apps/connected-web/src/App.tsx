@@ -342,7 +342,7 @@ const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, 
 const cells = useMemo(() => { const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1), offset = (first.getDay() + 6) % 7, count = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate(); return [...Array(offset).fill(null), ...Array.from({ length: count }, (_, i) => { const date = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`; return days.find(d => d.date === date) || { date, severity: 'neutral', count: 0, tasks: [] }; })]; }, [cursor, days]);
 const day = days.find(d => d.date === selected);
 return <>
-<PageTitle title="Calendar" subtitle="Task due dates, checklist dates, reminders, and completion dates. Project start dates are excluded."/>
+<PageTitle title="Calendar" subtitle="Task due dates, checklist dates, and completion dates. Notifications and project start dates are excluded."/>
 <Stack direction="row" justifyContent="space-between" mb={2}>
 <Button onClick={() => setCursor(new Date())}>Today</Button>
 <Stack direction="row">

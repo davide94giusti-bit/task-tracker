@@ -33,7 +33,7 @@ Worker service bindings keep internal services off public `workers.dev` routes. 
 
 Every application row is scoped by a stable `workspace_id`, with RLS enabled. The Data Worker also supplies the workspace on every query. PostgreSQL functions implement atomic prerequisite create-and-link, circular-dependency rejection, required checklist and mandatory prerequisite completion guards, idempotent reminder claims, and transactional imports. `version` supports optimistic concurrency.
 
-Calendar inclusion is due date, reminder timestamp, or completion timestamp. Project and task start dates are intentionally excluded. Today is active tasks due today or overdue; priority alone never puts a future task in Today.
+Calendar inclusion is limited to task due dates, incomplete checklist due dates, and task completion timestamps. Reminder and notification timestamps are delivery-only and never create Calendar cards or counts. Project and task start dates are intentionally excluded. Today is active tasks due today or overdue; priority alone never puts a future task in Today.
 
 Dependency impact score is `affected tasks × 10 + affected projects × 20 + overdue prerequisites × 25 + critical/high affected tasks × 30 + indirect depth beyond one × 5`. Traversal keeps a visited path, stops at depth 50, and deduplicates prerequisite/affected-task/depth tuples.
 
