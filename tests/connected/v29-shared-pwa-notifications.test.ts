@@ -37,7 +37,7 @@ describe('v16.16.2 shared portal PWA notification onboarding', () => {
 
   it('returns an installed Home Screen app to the originating shared link', () => {
     const prompt = read('apps/connected-web/src/PwaInstallPrompt.tsx');
-    expect(prompt).toContain("returnPath?.startsWith('/shared-tasks?token=')");
+    expect(prompt).toContain("returnPath?.startsWith('/') && !returnPath.startsWith('//')");
     expect(prompt).toContain('location.replace(returnPath)');
     expect(prompt).toContain('localStorage.removeItem(PWA_INSTALL_RETURN_PATH_KEY)');
   });

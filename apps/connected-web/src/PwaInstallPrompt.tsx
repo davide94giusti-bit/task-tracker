@@ -39,9 +39,9 @@ export function PwaInstallProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (standaloneMode()) {
       const returnPath = localStorage.getItem(PWA_INSTALL_RETURN_PATH_KEY);
-      if (returnPath?.startsWith('/shared-tasks?token=')) {
+      if (returnPath?.startsWith('/') && !returnPath.startsWith('//')) {
         localStorage.removeItem(PWA_INSTALL_RETURN_PATH_KEY);
-        if (location.pathname !== '/shared-tasks') {
+        if (`${location.pathname}${location.search}` !== returnPath) {
           location.replace(returnPath);
           return;
         }

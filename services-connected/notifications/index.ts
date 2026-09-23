@@ -1,5 +1,5 @@
 import { NotificationPreferences, PushSubscriptionWrite, RecordId } from "../../packages/connected-contracts";
-import { reminderEmail } from "../_shared/email";
+import { reminderEmail, type NotificationEmailInput } from "../_shared/email";
 import { sendWebPush } from "../_shared/webpush";
 import { body, call, health, internal, json, withRequest, workspaceContext } from "../_shared/runtime";
 import type { AuthContext, BaseEnv, Fetcher, WorkerHandler } from "../_shared/types";
@@ -17,7 +17,7 @@ async function personShareToken(id: string, secret: string) {
   return `${id}.${encode(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(id)))}`;
 }
 
-async function email(env: Env, to: string, input: { title: string; dateLabel: string; url: string; kind: string }, idempotency: string) {
+async function email(env: Env, to: string, input: NotificationEmailInput, idempotency: string) {
   const template = reminderEmail(input);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -30,6 +30,42 @@ async function email(env: Env, to: string, input: { title: string; dateLabel: st
   }
   return response.json();
 }
+
+const titleCase = (value?: string | null) => value ? value.replaceAll("_", " ").replace(/\b\w/g, character => character.toUpperCase()) : "";
+const validTimezone = (value?: string | null) => {
+  try { new Intl.DateTimeFormat("en-GB", { timeZone: value || "UTC" }).format(); return value || "UTC"; }
+  catch { return "UTC"; }
+};
+const dateOnly = (value?: string | null) => {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return "";
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12)));
+};
+const timestamp = (value?: string | null, timezone?: string | null) => value ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: validTimezone(timezone) }).format(new Date(value)) : "";
+const todayIn = (timezone?: string | null) => {
+  const parts = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: validTimezone(timezone) }).formatToParts(new Date());
+  const part = (type: string) => parts.find(value => value.type === type)?.value || "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+};
+const taskDueLabel = (delivery: any) => {
+  if (!delivery.dueDate) return "";
+  const prefix = delivery.dueDate < todayIn(delivery.timezone) ? "Overdue since" : "Due";
+  return `${prefix} ${dateOnly(delivery.dueDate)}${delivery.dueTime ? ` at ${String(delivery.dueTime).slice(0, 5)}` : ""}`;
+};
+const taskDetails = (delivery: any) => [
+  { label: "Due", value: taskDueLabel(delivery) || "No due date" },
+  { label: "Project", value: delivery.projectName || "No project" },
+  { label: "Priority", value: delivery.priority ? `${titleCase(delivery.priority)} priority` : null },
+  { label: "Status", value: titleCase(delivery.taskStatus) || null },
+  { label: "Responsible", value: delivery.responsiblePersonName || null },
+  { label: "Reminder", value: timestamp(delivery.reminderTime, delivery.timezone) || null },
+];
+const taskPushBody = (delivery: any) => [
+  taskDueLabel(delivery) || (delivery.reminderTime ? `Reminder ${timestamp(delivery.reminderTime, delivery.timezone)}` : "Needs your attention"),
+  delivery.projectName || "No project",
+  delivery.priority ? `${titleCase(delivery.priority)} priority` : "",
+  delivery.taskBlocked ? "Blocked" : "",
+].filter(Boolean).join(" · ");
 
 async function select(env: Env, context: AuthContext, table: string, filters: Record<string, unknown>, limit = 100) {
   return call(env.DATA, "/select", env, context, { method: "POST", body: JSON.stringify({ table, filters, limit }) }) as Promise<any[]>;
@@ -54,16 +90,18 @@ export default <WorkerHandler<Env>>{
           dateLabel: `This code expires in ${recipient.expiresInMinutes} minutes.`,
           url: env.APP_URL,
           kind: "Shared work verification",
+          summary: `Use this one-time code to verify your email and securely update shared work for ${recipient.personName}.`,
+          actionLabel: "Return to shared work",
         }, `share-verification-${input.shareId}-${Date.now()}`);
         return json({ sent: true, destination: recipient.email.replace(/^(.).+(@.+)$/, "$1***$2"), expiresInMinutes: recipient.expiresInMinutes }, 200, requestId);
       }
       if (url.pathname === "/deliver") {
-        const d = await body(request) as any, link = `${env.APP_URL}/?task=${encodeURIComponent(d.taskId)}`, system = { userId: "scheduler" };
+        const d = await body(request) as any, link = `${env.APP_URL}/?view=tasks&task=${encodeURIComponent(d.taskId)}&source=notification`, system = { userId: "scheduler" };
         const subscriptions = d.pushEnabled && !d.pushSent ? await call(env.DATA, "/admin/subscriptions", env, system, { method: "POST", body: JSON.stringify({ workspaceId: d.workspaceId, userId: d.userId }) }) as any[] : [];
         let pushSent = !!d.pushSent, emailSent = !!d.emailSent, errorCode: string | undefined;
         for (const sub of subscriptions) {
           try {
-            const response = await sendWebPush({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, { title: "Task Tracker", body: d.title, url: link, tag: d.deliveryId }, { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateJwk: env.VAPID_PRIVATE_JWK });
+            const response = await sendWebPush({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, { title: `Reminder · ${d.title}`, body: taskPushBody(d), url: link, tag: d.deliveryId }, { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateJwk: env.VAPID_PRIVATE_JWK });
             if (response.ok) pushSent = true;
             else if (response.status === 404 || response.status === 410) await call(env.DATA, "/admin/disable-subscription", env, system, { method: "POST", body: JSON.stringify({ id: sub.id, workspaceId: d.workspaceId }) });
           } catch { errorCode = "PUSH_FAILED"; }
@@ -71,7 +109,7 @@ export default <WorkerHandler<Env>>{
         if (d.emailEnabled && !emailSent && d.recipientEmail) {
           const count = Number(await call(env.DATA, "/admin/email-count", env, system, { method: "POST", body: "{}" })), ceiling = Number(env.EMAIL_DAILY_CEILING || 75);
           if (count >= ceiling) errorCode = "EMAIL_DAILY_CEILING";
-          else try { await email(env, d.recipientEmail, { title: d.title, dateLabel: d.reminderTime || "", url: link, kind: "Reminder" }, d.idempotencyKey); emailSent = true; }
+          else try { await email(env, d.recipientEmail, { title: d.title, url: link, kind: taskDueLabel(d).startsWith("Overdue") ? "Overdue task reminder" : "Task reminder", summary: taskDueLabel(d).startsWith("Overdue") ? "This task is overdue and still active. Review it now or update its schedule." : "This task has reached its configured reminder time and may need your attention.", actionLabel: "Open task", details: taskDetails(d) }, d.idempotencyKey); emailSent = true; }
           catch (error) { errorCode = (error as any).permanent ? "EMAIL_PERMANENT" : "EMAIL_TRANSIENT"; }
         }
         const delivered = (!d.pushEnabled || pushSent) && (!d.emailEnabled || emailSent), attempt = Number(d.attemptCount || 1), terminal = attempt >= 5 || errorCode === "EMAIL_PERMANENT", status = delivered ? "delivered" : errorCode === "EMAIL_DAILY_CEILING" ? "quota_reached" : terminal ? "failed" : "retry", nextAttemptAt = status === "retry" ? new Date(Date.now() + Math.min(3600, 30 * 2 ** attempt) * 1000).toISOString() : undefined;
@@ -89,7 +127,7 @@ export default <WorkerHandler<Env>>{
           try {
             const response = await sendWebPush(
               { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
-              { title: d.title, body: d.detail || "Your assigned work changed.", url: link, tag: `person-share-${d.deliveryId}` },
+              { title: `Shared work · ${d.title}`, body: [d.detail || "Your assigned work changed.", taskDueLabel(d), d.projectName].filter(Boolean).join(" · "), url: link, tag: `person-share-${d.deliveryId}` },
               { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateJwk: env.VAPID_PRIVATE_JWK },
             );
             if (response.ok) pushSent = true;
@@ -101,7 +139,7 @@ export default <WorkerHandler<Env>>{
           const count = Number(await call(env.DATA, "/admin/person-share-email-count", env, system, { method: "POST", body: "{}" })), ceiling = Number(env.EMAIL_DAILY_CEILING || 75);
           if (count >= ceiling) errorCode = "EMAIL_DAILY_CEILING";
           else try {
-            await email(env, d.recipientEmail, { title: d.title, dateLabel: d.detail || "Your assigned work changed.", url: link, kind: "Task update" }, `person-share-${d.deliveryId}`);
+            await email(env, d.recipientEmail, { title: d.title, url: link, kind: "Shared work update", summary: d.detail || "Your assigned work changed.", actionLabel: "Open shared work", details: taskDetails(d).filter(detail => detail.label !== "Reminder") }, `person-share-${d.deliveryId}`);
             emailSent = true;
           } catch (error) { errorCode = (error as any).permanent ? "EMAIL_PERMANENT" : "EMAIL_TRANSIENT"; }
         }
@@ -174,7 +212,7 @@ export default <WorkerHandler<Env>>{
       }
       if (url.pathname === "/test-email") {
         if (!context.email) throw new Error("No account email is available");
-        return json(await email(env, context.email, { title: "Your Task Tracker email connection works", dateLabel: new Date().toLocaleString(), url: env.APP_URL, kind: "Test email" }, `test-${context.userId}-${crypto.randomUUID()}`), 200, requestId);
+        return json(await email(env, context.email, { title: "Your Task Tracker email connection works", dateLabel: new Date().toLocaleString(), url: env.APP_URL, kind: "Test email", summary: "Email delivery is configured correctly for your Connected workspace.", actionLabel: "Open Task Tracker", details: [{ label: "Result", value: "Email delivery ready" }] }, `test-${context.userId}-${crypto.randomUUID()}`), 200, requestId);
       }
       if (url.pathname === "/test-push") {
         if (!(env.VAPID_SUBJECT && env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_JWK)) throw Object.assign(new Error("Web-push credentials are not configured"), { status: 503 });
