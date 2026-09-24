@@ -64,7 +64,7 @@ describe('v16.20.0 checklist editor and project invitations', () => {
     const manual = read('apps/connected-web/src/UserManualView.tsx');
     expect(manual).toContain('Checklist editor and reminders');
     expect(manual).toContain('Project people and invitations');
-    expect(read('packages/connected-contracts/release.ts')).toContain("'16.20.1'");
-    expect(read('apps/connected-web/public/service-worker.js')).toContain('task-tracker-connected-v16-20-1');
+    expect(read('packages/connected-contracts/release.ts')).toContain("'16.20.2'");
+    expect(read('apps/connected-web/public/service-worker.js')).toContain('task-tracker-connected-v16-20-2');
   });
 });
