@@ -24,6 +24,6 @@ describe('v16.19.1 calendar notification separation', () => {
   it('documents that notification timestamps never affect calendar cards or counts', () => {
     const manual = read('apps/connected-web/src/UserManualView.tsx');
     expect(manual).toContain('they never create Calendar numbers, cards, or day-dialog entries');
-    expect(read('packages/connected-contracts/release.ts')).toContain("'16.20.0'");
+    expect(read('packages/connected-contracts/release.ts')).toContain("'16.20.2'");
   });
 });

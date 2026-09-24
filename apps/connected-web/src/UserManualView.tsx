@@ -22,6 +22,23 @@ const manualVisuals: ManualVisualData[] = [
   { src: '/manual/diagnostics.png', points: [{ label: 'Refresh or download diagnostics', x: 84, y: 17, direction: 'left' }, { label: 'Connected service health', x: 48, y: 43, direction: 'down' }, { label: 'Recent service events', x: 50, y: 76, direction: 'up' }] }
 ];
 
+// Chapters and walkthrough images intentionally have different lifecycles. Keep
+// this mapping explicit so inserting a text-only chapter cannot shift every
+// subsequent image or render a nonexistent walkthrough.
+const manualVisualByTitle: Record<string, number> = {
+  'Getting started and navigation': 0,
+  'Dashboard, Today and deadline pressure': 1,
+  'Creating and editing tasks': 2,
+  'Checklist or separate task?': 3,
+  'Dependencies and blocked work': 4,
+  'Projects, calendar and costs': 5,
+  'People, contacts and Recap': 6,
+  'Shared collaboration portal': 7,
+  'Notifications, installation and reminder email': 8,
+  'Users, access and security': 9,
+  'Files, backup, restore and diagnostics': 10
+};
+
 function ManualVisual({ index, active }: { index: number; active: boolean }) {
   const visual = manualVisuals[index];
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
@@ -84,7 +101,7 @@ export function UserManualView() {
     <Stack direction="row" spacing={1} mb={2} alignItems="center"><Chip label={`${matches.length} section${matches.length === 1 ? '' : 's'}`} /><Typography variant="body2" color="text.secondary">Matching sections open automatically while searching.</Typography></Stack>
     {matches.map((section) => <Accordion key={section.title} expanded={normalized ? true : expanded === section.title} onChange={(_, open) => setExpanded(open ? section.title : false)}>
       <AccordionSummary expandIcon={<ExpandMore />}><Typography fontWeight={750}>{section.title}</Typography></AccordionSummary>
-      <AccordionDetails>{section.content}<ManualVisual index={sections.indexOf(section)} active={Boolean(normalized) || expanded === section.title}/></AccordionDetails>
+      <AccordionDetails>{section.content}{manualVisualByTitle[section.title] !== undefined && <ManualVisual index={manualVisualByTitle[section.title]} active={Boolean(normalized) || expanded === section.title}/>}</AccordionDetails>
     </Accordion>)}
     {!matches.length && <Alert severity="info">No manual section matches “{query}”. Try a shorter word such as task, person, cost or notification.</Alert>}
   </Box>;
