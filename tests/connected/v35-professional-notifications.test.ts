@@ -29,12 +29,12 @@ describe('v16.19.0 professional notifications and deep links', () => {
 
   it('sends rich task and shared-work push payloads', () => {
     const notifications = read('services-connected/notifications/index.ts');
-    expect(notifications).toContain('title: `Reminder · ${d.title}`');
-    expect(notifications).toContain('body: taskPushBody(d)');
+    expect(notifications).toContain('title: `${checklistReminder ? "Checklist reminder" : "Reminder"} · ${d.title}`');
+    expect(notifications).toContain('body: [taskPushBody(d), checklistReminder');
     expect(notifications).toContain('taskDueLabel(delivery)');
     expect(notifications).toContain('delivery.projectName || "No project"');
     expect(notifications).toContain('delivery.taskBlocked ? "Blocked"');
-    expect(notifications).toContain('title: `Shared work · ${d.title}`');
+    expect(notifications).toContain('title: `${checklistReminder ? "Checklist reminder" : "Shared work"} · ${d.title}`');
   });
 
   it('opens the exact task and retains it through authentication', () => {

@@ -114,7 +114,16 @@ export const ChecklistWrite = z.object({
   required: z.boolean().default(true),
   position: z.number().int().nonnegative().default(0),
   costAmount: MoneyAmount.optional(),
+  costDate: IsoDate.nullable().optional(),
   dueDate: IsoDate.nullable().optional(),
+  dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
+  notificationOffsets: z.array(z.union([z.literal(2880), z.literal(1440), z.literal(720), z.literal(360), z.literal(180), z.literal(120), z.literal(60), z.literal(30)])).max(2).default([]),
+  expectedVersion: z.number().int().positive().optional(),
+}).superRefine((value, context) => {
+  if (value.dueTime && !value.dueDate) context.addIssue({ code: "custom", path: ["dueTime"], message: "A due date is required when a due time is set" });
+  if (value.notificationOffsets.length && (!value.dueDate || !value.dueTime)) context.addIssue({ code: "custom", path: ["notificationOffsets"], message: "A due date and time are required for notifications" });
+  if (new Set(value.notificationOffsets).size !== value.notificationOffsets.length) context.addIssue({ code: "custom", path: ["notificationOffsets"], message: "Checklist notifications must use different times" });
+  if (value.notificationOffsets.length === 2 && value.notificationOffsets[0] <= value.notificationOffsets[1]) context.addIssue({ code: "custom", path: ["notificationOffsets"], message: "The first notification must occur before the second notification" });
 });
 export const ChecklistToggle = z.object({
   itemId: Uuid,
@@ -269,6 +278,17 @@ export const ProjectPersonSave = z.object({
   supervisable: z.boolean().default(false),
 }).strict();
 export const ProjectPersonRemove = z.object({ projectId: Uuid, personId: Uuid }).strict();
+export const ProjectInvitationWrite = z.object({
+  projectId: Uuid,
+  personId: Uuid,
+  access: z.enum(["read_only", "checklist", "tasks"]),
+  allowComments: z.boolean().default(false),
+  allowTaskCompletion: z.boolean().default(false),
+  allowCreateTasks: z.boolean().default(false),
+  allowManageChecklistItems: z.boolean().default(false),
+  expiresAt: z.string().datetime({ offset: true }).nullable().default(null),
+  offerNotifications: z.boolean().default(true),
+}).strict();
 export const ProjectPersonCreate = ProjectPersonSave.omit({ personId: true }).extend({
   fullName: z.string().trim().min(1).max(300),
   role: z.string().trim().max(300).default(""),

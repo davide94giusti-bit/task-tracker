@@ -30,6 +30,20 @@ Logs and Diagnostics shows correlated service events and filter controls. **Diag
 
 Enable notifications and optionally **Start with Windows** in Settings. Reminders can be shown while Task Tracker is running. Starting with Windows keeps local reminder scheduling available without a paid push service. If the app and its background processes are fully closed, notifications cannot fire.
 
+### Connected checklist reminders
+
+In the Connected app, add or edit a checklist item from its parent task to open the full-screen checklist editor. A checklist deadline may contain a date without a time, but the one or two optional reminders become available only after both a due date and due time are set. Reminder choices run from 48 hours to 30 minutes before the deadline. The first reminder must occur before the second; duplicate offsets are not allowed. Moving the deadline moves its reminders. Completing or deleting the checklist item—or closing its parent task—cancels pending reminders.
+
+Task Tracker sends a checklist reminder to an eligible application user responsible for the parent task. If none is available, an eligible opted-in guest is used, then the workspace owner. A contact email is never treated as an application identity without verification. Push, email, and in-app delivery continue to respect notification preferences.
+
+### Connected project people and invitations
+
+Manage project membership from **Projects → Project people → Add person**. Select an existing contact or create a new contact in the full-screen flow. Adding a person creates the project relationship but does not automatically grant digital access. Enable **Send a project invitation** only when the person should receive controlled access, then choose their permissions, expiry, and whether notification onboarding should be offered.
+
+The short `/join/` invitation contains a high-entropy, non-sequential code; the server stores only its hash for lookup. The recipient sees the inviter, project, shared counts, and permissions before choosing whether to continue as a guest or sign in. A signed-in recipient must explicitly accept, and their authenticated email must match the invited contact. Accepted projects remain live under **Shared with me** rather than being copied into a private workspace. Installation and browser notification permission are always optional and are requested only after a user action.
+
+People profiles remain the place for contact details, assigned work, related projects, and recaps. A recap reports selected work; adding a person creates a project relationship; inviting grants controlled digital access. These actions are deliberately separate.
+
 ## Installation note
 
 The free build is unsigned, so SmartScreen may display an “unknown publisher” warning. Verify the installer came from your trusted build location, choose More info, and continue. Your user data is preserved during normal updates and uninstall by default.

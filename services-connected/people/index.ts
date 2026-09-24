@@ -1,5 +1,5 @@
 import { PersonInput } from "../../packages/contracts";
-import { PersonShareConfigure, ProjectPersonCreate, ProjectPersonRemove, ProjectPersonSave, Uuid } from "../../packages/connected-contracts";
+import { PersonShareConfigure, ProjectInvitationWrite, ProjectPersonCreate, ProjectPersonRemove, ProjectPersonSave, Uuid } from "../../packages/connected-contracts";
 import {
   authContext,
   body,
@@ -41,6 +41,20 @@ async function verificationToken(id: string, secret: string) {
   const key = await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
   return `${value}.${encode(await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(`${value}:verified`)))}`;
 }
+const normalizeInvitationCode = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+async function projectInvitationCode(id: string, secret: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const bytes = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${id}:project-invitation`))).slice(0, 8);
+  const raw = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+  return raw.match(/.{1,4}/g)?.join("-") || raw;
+}
+async function projectInvitationHash(code: string) {
+  return encode(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalizeInvitationCode(code))));
+}
+async function invitationClientHash(value: string, secret: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return encode(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`invitation-client:${value}`)));
+}
 export default <WorkerHandler<Env>>{
   async fetch(request, env) {
     return withRequest("connected-people", request, env, async (requestId) => {
@@ -48,7 +62,30 @@ export default <WorkerHandler<Env>>{
       const url = new URL(request.url);
       if (url.pathname === "/health")
         return json(health("connected-people", ["data"]), 200, requestId);
+      if (url.pathname === "/public-project-invitation") {
+        const input = await body(request) as { code?: string };
+        const code = normalizeInvitationCode(String(input.code || ""));
+        if (code.length < 12 || code.length > 20) throw Object.assign(new Error("This invitation code is invalid"), { status: 404 });
+        const clientHash = await invitationClientHash(request.headers.get("x-client-ip") || "unknown", env.INTERNAL_SERVICE_TOKEN);
+        let invitation: unknown;
+        try {
+          invitation = await call(env.DATA, "/public/project-invitation", env, undefined, { method: "POST", body: JSON.stringify({ codeHash: await projectInvitationHash(code), clientHash }) });
+        } catch (error) {
+          if ((error as Error).message.includes("Too many invitation attempts"))
+            throw Object.assign(new Error("Too many invitation attempts. Try again in 10 minutes."), { status: 429 });
+          throw error;
+        }
+        if (!invitation) throw Object.assign(new Error("This project invitation is unavailable, expired, or revoked"), { status: 404 });
+        return json({ ...(invitation as object), token: await shareToken((invitation as any).shareId, env.INTERNAL_SERVICE_TOKEN) }, 200, requestId);
+      }
       const context = authContext(request);
+      if (url.pathname === "/accept-project-invitation") {
+        const input = await body(request) as { code?: string };
+        const clientHash = await invitationClientHash(`user:${context.userId}`, env.INTERNAL_SERVICE_TOKEN);
+        const invitation = await call(env.DATA, "/public/project-invitation", env, undefined, { method: "POST", body: JSON.stringify({ codeHash: await projectInvitationHash(String(input.code || "")), clientHash }) }) as any;
+        if (!invitation?.shareId) throw Object.assign(new Error("This project invitation is unavailable, expired, or revoked"), { status: 404 });
+        return json(await call(env.DATA, "/rpc", env, context, { method: "POST", body: JSON.stringify({ name: "claim_linked_project", args: { p_share_id: invitation.shareId } }) }), 200, requestId);
+      }
       if (url.pathname === "/claim-linked-project") {
         const input = await body(request) as { token?: string };
         const shareId = await verifyShareToken(String(input.token || ""), env.INTERNAL_SERVICE_TOKEN);
@@ -110,6 +147,31 @@ export default <WorkerHandler<Env>>{
       if (url.pathname === "/project-people/remove") {
         const input = ProjectPersonRemove.parse(await body(request));
         return json(await call(env.DATA, "/rpc", env, context, { method: "POST", body: JSON.stringify({ name: "remove_project_person", args: { p_project_id: input.projectId, p_person_id: input.personId } }) }), 200, requestId);
+      }
+      if (url.pathname === "/project-invitation") {
+        const input = ProjectInvitationWrite.parse(await body(request));
+        const [personRows, projectRows, linkRows] = await Promise.all([
+          call(env.DATA, "/select", env, context, { method: "POST", body: JSON.stringify({ table: "people", filters: { id: input.personId, deleted_at: null }, limit: 1 }) }) as Promise<any[]>,
+          call(env.DATA, "/select", env, context, { method: "POST", body: JSON.stringify({ table: "projects", filters: { id: input.projectId, deleted_at: null }, limit: 1 }) }) as Promise<any[]>,
+          call(env.DATA, "/select", env, context, { method: "POST", body: JSON.stringify({ table: "project_people", filters: { project_id: input.projectId, person_id: input.personId, deleted_at: null }, limit: 1 }) }) as Promise<any[]>,
+        ]);
+        if (!personRows.length || !projectRows.length || !linkRows.length) throw Object.assign(new Error("Add this person to the project before inviting them"), { status: 409 });
+        if (!String(personRows[0].email || "").trim()) throw Object.assign(new Error("Add a verified recipient email before creating an invitation"), { status: 409 });
+        let shares = await call(env.DATA, "/select", env, context, { method: "POST", body: JSON.stringify({ table: "person_task_shares", filters: { person_id: input.personId, revoked_at: null }, limit: 1 }) }) as any[];
+        if (!shares.length) shares = await call(env.DATA, "/write", env, context, { method: "POST", body: JSON.stringify({ table: "person_task_shares", method: "post", row: { id: crypto.randomUUID(), person_id: input.personId, created_by: context.userId } }) }) as any[];
+        let share = shares[0];
+        await call(env.DATA, "/rpc", env, context, { method: "POST", body: JSON.stringify({ name: "configure_person_share", args: {
+          p_share_id: share.id, p_scope_mode: "project", p_project_id: input.projectId,
+          p_allow_checklist_updates: input.access !== "read_only", p_allow_task_completion: input.access !== "read_only" && (input.access === "tasks" || input.allowTaskCompletion),
+          p_allow_comments: input.allowComments, p_allow_view_project_contacts: true, p_allow_view_contact_assignments: true,
+          p_allow_supervise_contact_checklists: input.access !== "read_only", p_allow_complete_contact_tasks: input.access !== "read_only" && (input.access === "tasks" || input.allowTaskCompletion),
+          p_allow_manage_project_contacts: false, p_allow_create_edit_tasks: input.access !== "read_only" && input.allowCreateTasks,
+          p_allow_manage_checklist_items: input.access !== "read_only" && input.allowManageChecklistItems, p_expires_at: input.expiresAt,
+        } }) });
+        const code = await projectInvitationCode(share.id, env.INTERNAL_SERVICE_TOKEN), codeHash = await projectInvitationHash(code);
+        const updated = await call(env.DATA, "/write", env, context, { method: "POST", body: JSON.stringify({ table: "person_task_shares", method: "patch", id: share.id, row: { invitation_code_hash: codeHash, invitation_notifications_offered: input.offerNotifications } }) }) as any[];
+        share = updated[0] || share;
+        return json({ active: true, code, path: `/join/${code}`, projectName: projectRows[0].name, personName: personRows[0].fullName, recipientEmail: personRows[0].email, expiresAt: share.expiresAt || null }, 200, requestId);
       }
       if (url.pathname === "/save") {
         const person = PersonInput.parse(await body(request)),

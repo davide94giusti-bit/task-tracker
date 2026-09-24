@@ -236,6 +236,16 @@ export default <WorkerHandler<Env>>{
         const task = (taskRows as any[])[0];
         if (!task)
           throw Object.assign(new Error("Task not found"), { status: 404 });
+        const checklistIds = new Set((checklist as any[]).map(item => item.id));
+        const reminderRows = (await allRows(env, context, "checklist_reminders", { deleted_at: null }))
+          .filter(reminder => checklistIds.has(reminder.checklistItemId) && !reminder.dismissed);
+        const reminderMap = new Map<string, any[]>();
+        for (const reminder of reminderRows) reminderMap.set(reminder.checklistItemId, [...(reminderMap.get(reminder.checklistItemId) || []), reminder]);
+        const enrichedChecklist = (checklist as any[]).map(item => ({
+          ...item,
+          notificationOffsets: (reminderMap.get(item.id) || []).sort((a, b) => a.sequence - b.sequence).map(reminder => reminder.offsetMinutes),
+          notificationRecipientName: null,
+        }));
         const prerequisiteRows = await Promise.all(
           (dependencies as any[]).map((dependency) =>
             call(env.DATA, "/select", env, context, {
@@ -264,37 +274,28 @@ export default <WorkerHandler<Env>>{
           },
         );
         return json(
-          { task, checklist, dependencies: enrichedDependencies, activities },
+          { task, checklist: enrichedChecklist, dependencies: enrichedDependencies, activities },
           200,
           requestId,
         );
       }
       if (url.pathname === "/checklist-save") {
         const input = ChecklistWrite.parse(await body(request));
-        return json(
-          await call(env.DATA, "/write", env, context, {
+        try {
+          return json(await call(env.DATA, "/rpc", env, context, {
             method: "POST",
-            body: JSON.stringify({
-              table: "checklist_items",
-              method: input.id ? "patch" : "post",
-              id: input.id,
-              row: {
-                ...(!input.id ? { id: crypto.randomUUID() } : {}),
-                task_id: input.taskId,
-                description: input.description,
-                completed: input.completed,
-                required: input.required,
-                position: input.position,
-                cost_amount: input.costAmount,
-                due_date: input.dueDate,
-                updated_by: context.userId,
-                ...(!input.id ? { created_by: context.userId } : {}),
-              },
-            }),
-          }),
-          200,
-          requestId,
-        );
+            body: JSON.stringify({ name: "save_checklist_item_schedule", args: {
+              p_item_id: input.id || crypto.randomUUID(), p_task_id: input.taskId,
+              p_description: input.description, p_completed: input.completed, p_required: input.required,
+              p_position: input.position, p_cost_amount: input.costAmount ?? null, p_cost_date: input.costDate ?? null, p_due_date: input.dueDate ?? null,
+              p_due_time: input.dueTime ?? null, p_notification_offsets: input.notificationOffsets,
+              p_expected_version: input.expectedVersion ?? null,
+            } }),
+          }), 200, requestId);
+        } catch (error) {
+          if ((error as Error).message.includes("changed on another device")) Object.assign(error as Error, { status: 409, code: "VERSION_CONFLICT" });
+          throw error;
+        }
       }
       if (url.pathname === "/checklist-delete") {
         const input = RecordId.parse(await body(request));

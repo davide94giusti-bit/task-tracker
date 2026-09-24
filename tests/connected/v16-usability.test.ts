@@ -27,7 +27,7 @@ describe('v16 usability and reliability', () => {
     expect(enhancements).toContain('Move “${shownTask.title}” to Trash?');
     expect(enhancements).toContain('>Delete task</Button>');
     expect(enhancements).toContain('aria-label="Delete checklist item"');
-    expect(enhancements).toContain('gridTemplateColumns: \'auto minmax(0,1fr) auto\'');
+    expect(enhancements).toContain('gridTemplateColumns: \'auto minmax(0,1fr) auto auto\'');
   });
 
   it('guides completion through required checklist items and prerequisites', () => {

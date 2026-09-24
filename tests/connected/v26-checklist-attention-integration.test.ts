@@ -44,15 +44,16 @@ describe('v16.16.0 checklist attention integration', () => {
     expect(ui).toContain('Carried-over overdue');
   });
 
-  it('creates idempotent timezone-aware in-app notifications but does not claim push/email support', () => {
+  it('creates idempotent timezone-aware in-app and scheduled checklist notifications', () => {
     const migration = read('supabase/migrations/0020_checklist_attention_deadline_pressure.sql');
     const notifications = read('services-connected/notifications/index.ts');
     const manual = read('apps/connected-web/src/UserManualView.tsx');
     expect(migration).toContain("'checklist-due:'||c.workspace_id::text||':'||m.user_id::text");
     expect(migration).toContain('pg_timezone_names');
     expect(notifications).toContain('checklistDueTodayInApp: true');
-    expect(notifications).toContain('checklistPushEmail: false');
-    expect(manual).toContain('Checklist push and email delivery are not active');
+    expect(notifications).toContain('checklistPushEmail: true');
+    expect(notifications).toContain('checklistRelativeReminders: true');
+    expect(manual).toContain('delivers configured checklist reminders by push or email');
   });
 
   it('documents scoring, classification, overdue carry-forward and date independence', () => {

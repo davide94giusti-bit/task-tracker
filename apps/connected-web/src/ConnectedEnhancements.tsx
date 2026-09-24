@@ -1150,6 +1150,38 @@ const reminderInputValue = (value?: string | null) => {
   return Number.isNaN(date.getTime()) ? '' : new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 };
 const reminderRepeatUnit = (repeat: 'daily' | 'weekly' | 'monthly') => repeat === 'daily' ? 'day' : repeat === 'weekly' ? 'week' : 'month';
+const checklistReminderOptions = [
+  [2880, '2 days before'], [1440, '1 day before'], [720, '12 hours before'], [360, '6 hours before'],
+  [180, '3 hours before'], [120, '2 hours before'], [60, '1 hour before'], [30, '30 minutes before']
+] as const;
+const emptyChecklistItem = (position: number): ChecklistItem => ({ description: '', completed: false, required: true, position, costAmount: null, costDate: null, dueDate: null, dueTime: null, notificationOffsets: [] });
+
+function ChecklistEditorDialog({ open, item, taskTitle, projectName, responsibleName, currencyCode, onClose, onSave }: { open: boolean; item: ChecklistItem; taskTitle: string; projectName: string; responsibleName?: string; currencyCode: string; onClose: () => void; onSave: (item: ChecklistItem) => void }) {
+  const [draft, setDraft] = useState(item), [error, setError] = useState('');
+  useEffect(() => { if (open) { setDraft({ ...item, notificationOffsets: item.notificationOffsets || [] }); setError(''); } }, [open, item]);
+  const offsets = draft.notificationOffsets || [], setOffset = (index: number, raw: string) => setDraft(value => { const next = [...(value.notificationOffsets || [])]; if (!raw) next.splice(index, 1); else next[index] = Number(raw); return { ...value, notificationOffsets: next }; });
+  const save = () => {
+    if (!draft.description.trim()) return setError('Enter a checklist-item description.');
+    if (draft.dueTime && !draft.dueDate) return setError('Select a due date before choosing a due time.');
+    if (offsets.length && (!draft.dueDate || !draft.dueTime)) return setError('Select a due date and time to configure notifications.');
+    if (offsets.length === 2 && offsets[0] <= offsets[1]) return setError('The first notification must occur before the second notification.');
+    if (new Set(offsets).size !== offsets.length) return setError('Choose two different notification times.');
+    if (draft.dueDate && draft.dueTime && offsets.some(offset => new Date(`${draft.dueDate}T${draft.dueTime}`).getTime() - offset * 60_000 <= Date.now())) return setError('A checklist notification cannot be scheduled in the past.');
+    onSave({ ...draft, description: draft.description.trim(), dueDate: draft.dueDate || null, dueTime: draft.dueDate && draft.dueTime ? draft.dueTime : null, notificationOffsets: draft.dueDate && draft.dueTime ? offsets : [] });
+  };
+  return <Dialog open={open} onClose={onClose} fullScreen slotProps={{ paper: { sx: { height: '100dvh' } } }}>
+    <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', py: 1.5 }}><Stack direction="row" alignItems="center" spacing={1}><IconButton aria-label="Back to task" onClick={onClose}><ArrowBack/></IconButton><Box flex={1}><Typography variant="h6">{item.id ? 'Edit checklist item' : 'New checklist item'}</Typography><Typography variant="body2" color="text.secondary">{projectName || 'No project'} → {taskTitle || 'New task'} → Checklist item</Typography></Box><Button variant="contained" onClick={save}>Save</Button></Stack></DialogTitle>
+    <DialogContent sx={{ py: 3 }}><Stack spacing={3} sx={{ maxWidth: 760, mx: 'auto' }}>
+      {error && <Alert severity="error" role="alert">{error}</Alert>}
+      <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="overline" color="text.secondary">Parent task</Typography><Typography fontWeight={800}>{taskTitle || 'This new task'}</Typography><Typography variant="body2" color="text.secondary">Project: {projectName || 'No project'}</Typography></Paper>
+      <Box><Typography fontWeight={800} mb={1.5}>Checklist item</Typography><Stack spacing={1.5}><TextField autoFocus required multiline minRows={3} label="Description" value={draft.description} onChange={event => setDraft(value => ({ ...value, description: event.target.value }))}/><FormControlLabel control={<Switch checked={draft.required} onChange={event => setDraft(value => ({ ...value, required: event.target.checked }))}/>} label="Required for task completion"/></Stack></Box>
+      <Box><Typography fontWeight={800} mb={1.5}>Deadline</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}><TextField fullWidth type="date" label="Due date" value={draft.dueDate || ''} onChange={event => setDraft(value => ({ ...value, dueDate: event.target.value || null, ...(!event.target.value ? { dueTime: null, notificationOffsets: [] } : {}) }))} slotProps={{ inputLabel: { shrink: true } }}/><TextField fullWidth type="time" label="Due time" disabled={!draft.dueDate} value={draft.dueTime || ''} onChange={event => setDraft(value => ({ ...value, dueTime: event.target.value || null, ...(!event.target.value ? { notificationOffsets: [] } : {}) }))} slotProps={{ inputLabel: { shrink: true } }}/></Stack><Typography variant="caption" color="text.secondary">A date can stand alone. A time is required only when notifications are enabled.</Typography></Box>
+      <Paper variant="outlined" sx={{ p: 2 }}><Stack direction="row" spacing={1} alignItems="center"><NotificationsActive color="primary"/><Box><Typography fontWeight={800}>Notifications</Typography><Typography variant="body2" color="text.secondary">Optional · maximum two · from 2 days to 30 minutes before.</Typography></Box></Stack>{!draft.dueDate || !draft.dueTime ? <Alert severity="info" sx={{ mt: 2 }}>Select a due time to configure notifications.</Alert> : <Stack spacing={1.5} mt={2}><TextField select label="Notification 1 — earlier" value={offsets[0] || ''} onChange={event => setOffset(0, event.target.value)}><MenuItem value="">Off</MenuItem>{checklistReminderOptions.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</TextField><TextField select label="Notification 2 — later" disabled={!offsets[0]} value={offsets[1] || ''} onChange={event => setOffset(1, event.target.value)}><MenuItem value="">Off</MenuItem>{checklistReminderOptions.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</TextField><Alert severity="info">{draft.notificationRecipientName ? <>Notifications are currently assigned to <strong>{draft.notificationRecipientName}</strong>.</> : <>The recipient is resolved securely when you save: {responsibleName ? <><strong>{responsibleName}</strong> if linked to eligible verified access, otherwise an opted-in project guest or the workspace owner.</> : <>the workspace owner.</>}</>}</Alert></Stack>}</Paper>
+      <Box><Typography fontWeight={800} mb={1.5}>Cost — optional</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}><TextField fullWidth type="number" label={`Amount (${currencyCode})`} value={draft.costAmount ?? ''} onChange={event => setDraft(value => ({ ...value, costAmount: event.target.value === '' ? null : Number(event.target.value), ...(!event.target.value ? { costDate: null } : {}) }))} slotProps={{ htmlInput: { min: 0, step: .01 } }}/><TextField fullWidth type="date" label="Cost date" disabled={draft.costAmount === null || draft.costAmount === undefined} value={draft.costDate || ''} onChange={event => setDraft(value => ({ ...value, costDate: event.target.value || null }))} slotProps={{ inputLabel: { shrink: true } }}/></Stack></Box>
+    </Stack></DialogContent>
+    <DialogActions sx={{ position: 'sticky', bottom: 0, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper', p: 2, pb: 'calc(16px + env(safe-area-inset-bottom))' }}><Button onClick={onClose}>Cancel</Button><Button variant="contained" onClick={save}>{item.id ? 'Save changes' : 'Add checklist item'}</Button></DialogActions>
+  </Dialog>;
+}
 
 export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile }: { task: Task | null; newDate: string | null; open: boolean; onClose: () => void; onSaved: () => void; mobile: boolean }) {
   const createdTaskId = useRef<string | null>(null);
@@ -1176,8 +1208,8 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
     [people, setPeople] = useState<Person[]>([]),
     [tasks, setTasks] = useState<Task[]>([]),
     [currencyCode, setCurrencyCode] = useState('CHF'),
-    [checklistText, setChecklistText] = useState(''),
     [prerequisiteId, setPrerequisiteId] = useState('');
+  const [checklistEditorIndex, setChecklistEditorIndex] = useState<number | null>(null), [checklistDraft, setChecklistDraft] = useState<ChecklistItem>(emptyChecklistItem(0));
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]),
     [pendingFiles, setPendingFiles] = useState<File[]>([]),
     [linkLabel, setLinkLabel] = useState(''),
@@ -1258,12 +1290,8 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
       })
     );
   }, [tasks]);
-  const addChecklist = () => {
-    const description = checklistText.trim();
-    if (!description) return;
-    setChecklist((value) => [...value, { description, completed: false, required: true, position: value.length, costAmount: null, dueDate: null }]);
-    setChecklistText('');
-  };
+  const addChecklist = () => { setChecklistDraft(emptyChecklistItem(checklist.length)); setChecklistEditorIndex(checklist.length); };
+  const editChecklist = (item: ChecklistItem, index: number) => { setChecklistDraft({ ...item, notificationOffsets: item.notificationOffsets || [] }); setChecklistEditorIndex(index); };
   const addDependency = () => {
     const prerequisite = tasks.find((item) => item.id === prerequisiteId);
     if (!prerequisite || dependencies.some((item) => item.prerequisiteTaskId === prerequisite.id)) return;
@@ -1325,7 +1353,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
         api('/tasks/checklist/save', {
           method: 'POST',
           timeoutMs: 60_000,
-          body: { ...item, taskId, position: index }
+          body: { ...item, taskId, position: index, expectedVersion: item.id ? item.version : undefined }
         })
       )
     );
@@ -1427,6 +1455,7 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
     }
   };
   return (
+    <>
     <Dialog
       open={open}
       onClose={busy ? undefined : onClose}
@@ -1545,36 +1574,13 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
             <Typography variant="h6">Checklist</Typography>
             <FormControlLabel sx={{ mt: .5 }} control={<Switch checked={editor.completeWhenChecklistDone} onChange={(event) => setEditor((value) => ({ ...value, completeWhenChecklistDone: event.target.checked }))}/>} label="Complete task automatically when every checklist item is done"/>
             <Typography variant="caption" color="text.secondary" display="block">If an automatically completed checklist item is reopened, the task returns to In progress.</Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} my={1}>
-              <TextField
-                fullWidth
-                size="small"
-                label="New checklist item"
-                value={checklistText}
-                onChange={(event) => setChecklistText(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    addChecklist();
-                  }
-                }}
-              />
-              <Button startIcon={<Add />} onClick={addChecklist}>
-                Add
-              </Button>
-            </Stack>
-            <Stack spacing={0.5}>
+            <Button variant="outlined" startIcon={<Add />} onClick={addChecklist} sx={{ my: 1.5, minHeight: 44 }}>Add checklist item</Button>
+            <Stack spacing={1}>
               {checklist.map((item, index) => (
-                <Box key={item.id || index} sx={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto', columnGap: 0.5, rowGap: 0.75, alignItems: 'center', py: 0.5 }}>
+                <Paper key={item.id || index} variant="outlined" sx={{ p: 1.25 }}><Box sx={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto auto', columnGap: 0.75, alignItems: 'center' }}>
                   <Checkbox checked={item.completed} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, completed: event.target.checked } : entry)))} />
-                  <Typography
-                    sx={{
-                      textDecoration: item.completed ? 'line-through' : 'none',
-                      flex: 1
-                    }}
-                  >
-                    {item.description}
-                  </Typography>
+                  <Box minWidth={0}><Typography fontWeight={700} sx={{ textDecoration: item.completed ? 'line-through' : 'none' }}>{item.description}</Typography><Typography variant="caption" color="text.secondary">{item.dueDate ? `Due ${new Date(`${item.dueDate}T12:00:00`).toLocaleDateString()}${item.dueTime ? ` at ${item.dueTime.slice(0, 5)}` : ''}` : 'No deadline'} · {item.required ? 'Required' : 'Optional'}{item.notificationOffsets?.length ? ` · ${item.notificationOffsets.length} notification${item.notificationOffsets.length === 1 ? '' : 's'}` : ''}</Typography></Box>
+                  <IconButton size="small" aria-label={`Edit ${item.description}`} onClick={() => editChecklist(item, index)}><Edit fontSize="small" /></IconButton>
                   <IconButton
                     size="small"
                     aria-label="Delete checklist item"
@@ -1585,15 +1591,9 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
                   >
                     <Delete fontSize="small" />
                   </IconButton>
-                  <Box />
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
-                    <TextField size="small" type="number" label={`Cost (${currencyCode})`} placeholder="N/A" value={item.costAmount ?? ''} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, costAmount: event.target.value === '' ? null : Number(event.target.value) } : entry)))} slotProps={{ htmlInput: { min: 0, step: 0.01 } }} sx={{ width: { xs: '100%', sm: 150 } }} />
-                    <TextField size="small" type="date" label="Checklist date" value={item.dueDate || ''} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, dueDate: event.target.value || null } : entry)))} slotProps={{ inputLabel: { shrink: true } }} sx={{ width: { xs: '100%', sm: 175 } }}/>
-                    <FormControlLabel control={<Checkbox size="small" checked={item.required} onChange={(event) => setChecklist((value) => value.map((entry, i) => (i === index ? { ...entry, required: event.target.checked } : entry)))} />} label="Required" />
-                  </Stack>
-                  <Box />
-                </Box>
+                </Box></Paper>
               ))}
+              {!checklist.length && <Typography color="text.secondary">No checklist items yet.</Typography>}
             </Stack>
           </Paper>
           <Paper variant="outlined" sx={{ p: 2 }}>
@@ -1734,5 +1734,16 @@ export function TaskEditorDialog({ task, newDate, open, onClose, onSaved, mobile
         </Button>
       </DialogActions>
     </Dialog>
+    <ChecklistEditorDialog
+      open={checklistEditorIndex !== null}
+      item={checklistDraft}
+      taskTitle={editor.title.trim() || task?.title || 'New task'}
+      projectName={projects.find(project => project.id === editor.projectId)?.name || 'No project'}
+      responsibleName={people.find(person => person.id === editor.responsiblePersonId)?.fullName}
+      currencyCode={currencyCode}
+      onClose={() => setChecklistEditorIndex(null)}
+      onSave={item => { const index = checklistEditorIndex; if (index === null) return; setChecklist(value => index < value.length ? value.map((entry, current) => current === index ? item : entry) : [...value, item]); setChecklistEditorIndex(null); }}
+    />
+    </>
   );
 }
