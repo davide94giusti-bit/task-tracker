@@ -54,6 +54,7 @@ const taskDueLabel = (delivery: any) => {
 };
 const taskDetails = (delivery: any) => [
   { label: "Due", value: taskDueLabel(delivery) || "No due date" },
+  { label: "Parent task", value: delivery.kind === "checklist_reminder" ? delivery.parentTaskTitle : null },
   { label: "Project", value: delivery.projectName || "No project" },
   { label: "Priority", value: delivery.priority ? `${titleCase(delivery.priority)} priority` : null },
   { label: "Status", value: titleCase(delivery.taskStatus) || null },
@@ -97,11 +98,12 @@ export default <WorkerHandler<Env>>{
       }
       if (url.pathname === "/deliver") {
         const d = await body(request) as any, link = `${env.APP_URL}/?view=tasks&task=${encodeURIComponent(d.taskId)}&source=notification`, system = { userId: "scheduler" };
+        const checklistReminder = d.kind === "checklist_reminder";
         const subscriptions = d.pushEnabled && !d.pushSent ? await call(env.DATA, "/admin/subscriptions", env, system, { method: "POST", body: JSON.stringify({ workspaceId: d.workspaceId, userId: d.userId }) }) as any[] : [];
         let pushSent = !!d.pushSent, emailSent = !!d.emailSent, errorCode: string | undefined;
         for (const sub of subscriptions) {
           try {
-            const response = await sendWebPush({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, { title: `Reminder · ${d.title}`, body: taskPushBody(d), url: link, tag: d.deliveryId }, { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateJwk: env.VAPID_PRIVATE_JWK });
+            const response = await sendWebPush({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, { title: `${checklistReminder ? "Checklist reminder" : "Reminder"} · ${d.title}`, body: [taskPushBody(d), checklistReminder ? `Task: ${d.parentTaskTitle}` : ""].filter(Boolean).join(" · "), url: link, tag: d.deliveryId }, { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateJwk: env.VAPID_PRIVATE_JWK });
             if (response.ok) pushSent = true;
             else if (response.status === 404 || response.status === 410) await call(env.DATA, "/admin/disable-subscription", env, system, { method: "POST", body: JSON.stringify({ id: sub.id, workspaceId: d.workspaceId }) });
           } catch { errorCode = "PUSH_FAILED"; }
@@ -109,7 +111,7 @@ export default <WorkerHandler<Env>>{
         if (d.emailEnabled && !emailSent && d.recipientEmail) {
           const count = Number(await call(env.DATA, "/admin/email-count", env, system, { method: "POST", body: "{}" })), ceiling = Number(env.EMAIL_DAILY_CEILING || 75);
           if (count >= ceiling) errorCode = "EMAIL_DAILY_CEILING";
-          else try { await email(env, d.recipientEmail, { title: d.title, url: link, kind: taskDueLabel(d).startsWith("Overdue") ? "Overdue task reminder" : "Task reminder", summary: taskDueLabel(d).startsWith("Overdue") ? "This task is overdue and still active. Review it now or update its schedule." : "This task has reached its configured reminder time and may need your attention.", actionLabel: "Open task", details: taskDetails(d) }, d.idempotencyKey); emailSent = true; }
+          else try { await email(env, d.recipientEmail, { title: d.title, url: link, kind: checklistReminder ? "Checklist reminder" : taskDueLabel(d).startsWith("Overdue") ? "Overdue task reminder" : "Task reminder", summary: checklistReminder ? `This checklist item in “${d.parentTaskTitle}” has reached its configured reminder time.` : taskDueLabel(d).startsWith("Overdue") ? "This task is overdue and still active. Review it now or update its schedule." : "This task has reached its configured reminder time and may need your attention.", actionLabel: "Open parent task", details: taskDetails(d) }, d.idempotencyKey); emailSent = true; }
           catch (error) { errorCode = (error as any).permanent ? "EMAIL_PERMANENT" : "EMAIL_TRANSIENT"; }
         }
         const delivered = (!d.pushEnabled || pushSent) && (!d.emailEnabled || emailSent), attempt = Number(d.attemptCount || 1), terminal = attempt >= 5 || errorCode === "EMAIL_PERMANENT", status = delivered ? "delivered" : errorCode === "EMAIL_DAILY_CEILING" ? "quota_reached" : terminal ? "failed" : "retry", nextAttemptAt = status === "retry" ? new Date(Date.now() + Math.min(3600, 30 * 2 ** attempt) * 1000).toISOString() : undefined;
@@ -120,14 +122,14 @@ export default <WorkerHandler<Env>>{
         const d = await body(request) as any,
           token = await personShareToken(d.shareId, env.INTERNAL_SERVICE_TOKEN),
           link = `${env.APP_URL}/shared-tasks?token=${encodeURIComponent(token)}`,
-          system = { userId: "scheduler" };
+          system = { userId: "scheduler" }, checklistReminder = d.kind === "checklist.reminder";
         const subscriptions = d.pushEnabled && !d.pushSent ? await call(env.DATA, "/admin/person-share-subscriptions", env, system, { method: "POST", body: JSON.stringify({ shareId: d.shareId }) }) as any[] : [];
         let pushSent = !!d.pushSent, emailSent = !!d.emailSent, errorCode: string | undefined;
         for (const subscription of subscriptions) {
           try {
             const response = await sendWebPush(
               { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
-              { title: `Shared work · ${d.title}`, body: [d.detail || "Your assigned work changed.", taskDueLabel(d), d.projectName].filter(Boolean).join(" · "), url: link, tag: `person-share-${d.deliveryId}` },
+              { title: `${checklistReminder ? "Checklist reminder" : "Shared work"} · ${d.title}`, body: [d.detail || "Your assigned work changed.", taskDueLabel(d), d.projectName].filter(Boolean).join(" · "), url: link, tag: `person-share-${d.deliveryId}` },
               { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateJwk: env.VAPID_PRIVATE_JWK },
             );
             if (response.ok) pushSent = true;
@@ -139,7 +141,7 @@ export default <WorkerHandler<Env>>{
           const count = Number(await call(env.DATA, "/admin/person-share-email-count", env, system, { method: "POST", body: "{}" })), ceiling = Number(env.EMAIL_DAILY_CEILING || 75);
           if (count >= ceiling) errorCode = "EMAIL_DAILY_CEILING";
           else try {
-            await email(env, d.recipientEmail, { title: d.title, url: link, kind: "Shared work update", summary: d.detail || "Your assigned work changed.", actionLabel: "Open shared work", details: taskDetails(d).filter(detail => detail.label !== "Reminder") }, `person-share-${d.deliveryId}`);
+            await email(env, d.recipientEmail, { title: d.title, url: link, kind: checklistReminder ? "Checklist reminder" : "Shared work update", summary: d.detail || "Your assigned work changed.", actionLabel: "Open shared work", details: taskDetails(d).filter(detail => detail.label !== "Reminder") }, `person-share-${d.deliveryId}`);
             emailSent = true;
           } catch (error) { errorCode = (error as any).permanent ? "EMAIL_PERMANENT" : "EMAIL_TRANSIENT"; }
         }
@@ -181,7 +183,7 @@ export default <WorkerHandler<Env>>{
             enabled: Boolean(preferences[0]?.pushEnabled),
             activeSubscriptions: subscriptions.length,
           },
-          scheduler: { cadenceMinutes: 5, explicitTaskReminders: true, checklistDueTodayInApp: true, checklistPushEmail: false, dueTodayAutomation: false, overdueAutomation: false, dailySummaryAutomation: false },
+          scheduler: { cadenceMinutes: 5, explicitTaskReminders: true, checklistDueTodayInApp: true, checklistPushEmail: true, checklistRelativeReminders: true, dueTodayAutomation: false, overdueAutomation: false, dailySummaryAutomation: false },
           deliveries: {
             pending: deliveries.filter(item => ['pending', 'retry'].includes(item.status)).length,
             failed: deliveries.filter(item => item.status === 'failed').length,

@@ -57,6 +57,8 @@ const routes: Array<[string, RegExp, keyof Env, string]> = [
   ["POST", /^\/v1\/people\/project-people\/save$/, "PEOPLE", "/project-people/save"],
   ["POST", /^\/v1\/people\/project-people\/create$/, "PEOPLE", "/project-people/create"],
   ["POST", /^\/v1\/people\/project-people\/remove$/, "PEOPLE", "/project-people/remove"],
+  ["POST", /^\/v1\/people\/project-invitation$/, "PEOPLE", "/project-invitation"],
+  ["POST", /^\/v1\/people\/accept-project-invitation$/, "PEOPLE", "/accept-project-invitation"],
   ["POST", /^\/v1\/people\/share-link$/, "PEOPLE", "/share-link"],
   ["POST", /^\/v1\/people\/claim-linked-project$/, "PEOPLE", "/claim-linked-project"],
   ["GET", /^\/v1\/people\/linked-projects$/, "PEOPLE", "/linked-projects"],
@@ -212,6 +214,12 @@ export default <WorkerHandler<Env>>{
         "/v1/public/person-checklist-mutation": "/public/person-checklist-mutation",
         "/v1/public/person-project-person": "/public/person-project-person",
       };
+      if (url.pathname === "/v1/public/project-invitation" && request.method === "GET") {
+        const code = url.searchParams.get("code") || "";
+        const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+        const result = await call(env.PEOPLE, "/public-project-invitation", env, undefined, { method: "POST", body: JSON.stringify({ code }), headers: { "x-request-id": requestId, "x-client-ip": clientIp } });
+        return json(result, 200, requestId, headers || {});
+      }
       if (["/v1/public/person-verification/request", "/v1/public/person-verification/verify"].includes(url.pathname) && request.method === "POST") {
         const payload = await body(request) as Record<string, unknown>;
         const shareId = await verifyShareToken(String(payload.token || ""), env.INTERNAL_SERVICE_TOKEN);
